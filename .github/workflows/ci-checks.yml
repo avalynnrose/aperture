@@ -67,3 +67,4 @@ jobs:
           done
           psql -h localhost -U postgres -d ci -Atc "select auto_request_seerr_user_id is null, series_auto_request_seasons from top_picks_config" | tee defaults.txt
           test "$(cat defaults.txt)" = "t|all"
+          test "$(psql -h localhost -U postgres -d ci -Atc "select movies_auto_request_rules = '{}'::jsonb and series_auto_request_rules = '{}'::jsonb from top_picks_config")" = "t"
