@@ -8,6 +8,7 @@
  */
 import { createHash } from 'crypto'
 import { getMediaStatus } from '../seerr/index.js'
+import { createMetadataGetter } from './autoRequestMetadata.js'
 import { effectiveTargetCount, type AutoRequestRules } from './autoRequestRules.js'
 import { gatherRankedCandidates, type AutoRequestMediaType, type GatheredCandidates } from './autoRequestCandidates.js'
 import {
@@ -68,12 +69,6 @@ export function seerrReadDeps(mediaType: AutoRequestMediaType, getMetadata: Sele
   }
 }
 
-/** Placeholder until the TMDB metadata lookup is wired in: fail safe (nothing is requested on it). */
-const metadataNotAvailable: SelectionDeps['getMetadata'] = async () => ({
-  status: 'error',
-  message: 'metadata lookup is not available in this build',
-})
-
 export async function planAutoRequests(
   mediaType: AutoRequestMediaType,
   config: TopPicksConfig,
@@ -89,7 +84,7 @@ export async function planAutoRequests(
     gathered.candidates,
     rules,
     { perRunCap },
-    deps.selection ?? seerrReadDeps(mediaType, metadataNotAvailable)
+    deps.selection ?? seerrReadDeps(mediaType, createMetadataGetter(mediaType))
   )
   const configVersion = new Date(config.updatedAt).toISOString()
   return {
