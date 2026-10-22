@@ -3,8 +3,9 @@
 # Multi-stage build: install deps, build packages, build web, build api
 # ===================================================================
 
+# Fork: the node:20-alpine base is pinned by digest so rebuilds are reproducible; update it deliberately.
 # Stage 1: Dependencies
-FROM node:20-alpine AS deps
+FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS deps
 WORKDIR /app
 
 ENV HUSKY=0
@@ -35,7 +36,7 @@ RUN pnpm -r build
 
 # ===================================================================
 # Stage 3: Production dependencies only
-FROM node:20-alpine AS prod-deps
+FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS prod-deps
 WORKDIR /app
 
 ENV HUSKY=0
@@ -52,7 +53,7 @@ RUN pnpm install --prod --frozen-lockfile --ignore-scripts && \
 
 # ===================================================================
 # Stage 4: Runtime
-FROM node:20-alpine AS runner
+FROM node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS runner
 WORKDIR /app
 
 # Install dependencies:
