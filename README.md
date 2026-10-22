@@ -158,6 +158,16 @@ Choose which Seerr user account is credited with automatic Top Picks requests, f
 - **Requirements:** Seerr must be configured, and its API key must belong to an admin (Seerr only honors a requesting user ID from an admin key).
 - **Admin API:** `GET /api/seerr/users` (admin only) returns `{ users: [{ id, name }] }`; emails and tokens are not included.
 
+### Auto-request rules (Settings → Top Picks → Auto-Request)
+
+Choose *which* missing titles are requested automatically. Details: [docs/admin/auto-request-rules.md](docs/admin/auto-request-rules.md).
+
+- **Strategies:** *Missing-first* (default, unchanged behavior), **Strict Top N**, **Fill to N**; separate settings and target count for movies and TV, plus the existing per-run maximum as an independent safety cap.
+- **Ranking:** external list order (default) or the hybrid blend the Top Picks display uses (hybrid sources only).
+- **Filters:** country of origin (include or exclude), TMDB genres, TMDB keywords, alongside the existing language filter. Failed or empty metadata is never silently treated as a match.
+- **Preview:** a read-only table of the ranked candidates with original rank, status, filter matches and reasons, built by the same code as the real run. Manual runs ask for confirmation.
+- **Defaults:** every rule is off or set to upstream behavior until you change it.
+
 ### TV season selection (Settings → Top Picks → Auto-Request → Series)
 
 Choose which seasons automatic TV requests ask for. This is independent of the requester setting.
