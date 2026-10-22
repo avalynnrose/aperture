@@ -37,10 +37,27 @@ jobs:
       PGPASSWORD: ci-throwaway
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      - name: Public-content check (no private addresses, emails or tokens in added lines)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          # This repository is public. Added lines must not contain private IP addresses, personal
+          # email addresses, secret-looking tokens or private keys. GitHub no-reply and example
+          # addresses are fine.
+          hits=$(git diff -U0 "origin/$BASE_REF"...HEAD -- . ':!pnpm-lock.yaml' \
+            | grep '^+' | grep -v '^+++' \
+            | grep -n -E '(^|[^0-9])(192\.168\.|10\.[0-9]+\.[0-9]+\.[0-9]+|172\.(1[6-9]|2[0-9]|3[01])\.)|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|ghp_[A-Za-z0-9]{20,}|github_pat_|BEGIN [A-Z ]*PRIVATE KEY' \
+            | grep -v -i -E 'noreply@|@example\.(com|invalid)|@users\.noreply' || true)
+          if [ -n "$hits" ]; then echo "Possible private content in added lines:"; echo "$hits"; exit 1; fi
+          echo "no private addresses, emails or tokens in added lines"
 
       - name: Install
         run: |
