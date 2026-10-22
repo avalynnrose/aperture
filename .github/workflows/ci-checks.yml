@@ -68,3 +68,9 @@ jobs:
           psql -h localhost -U postgres -d ci -Atc "select auto_request_seerr_user_id is null, series_auto_request_seasons from top_picks_config" | tee defaults.txt
           test "$(cat defaults.txt)" = "t|all"
           test "$(psql -h localhost -U postgres -d ci -Atc "select movies_auto_request_rules = '{}'::jsonb and series_auto_request_rules = '{}'::jsonb from top_picks_config")" = "t"
+
+      - name: Auto-request integration tests (Postgres + mock Seerr + fake TMDB)
+        env:
+          DATABASE_URL: postgres://postgres:ci-throwaway@localhost:5432/ci
+          AR_INTEGRATION: '1'
+        run: pnpm --filter @aperture/core exec node --import tsx --test src/topPicks/autoRequest.integration.test.ts
