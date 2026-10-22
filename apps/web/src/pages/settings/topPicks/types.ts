@@ -15,6 +15,17 @@ export type HybridExternalSource =
   | 'tmdb_top_rated'
   | 'mdblist'
 
+export interface AutoRequestRules {
+  strategy: 'strict' | 'fill'
+  targetCount: number | null
+  maxCandidates: number
+  rankBasis: 'external' | 'blended'
+  countries: { mode: 'exclude' | 'include'; codes: string[]; match: 'any' | 'all' }
+  excludedGenreIds: number[]
+  excludedKeywords: { id: number; name: string }[]
+  missingMetadata: 'skip' | 'allow'
+}
+
 export interface TopPicksConfig {
   isEnabled: boolean
   // Movies-specific settings
@@ -74,6 +85,9 @@ export interface TopPicksConfig {
   autoRequestSeerrUserId: number | null
   // Seasons requested by automatic TV requests
   seriesAutoRequestSeasons: 'all' | 'first'
+  // Auto-request rules (strategy, target count, content filters) per media type
+  moviesAutoRequestRules: AutoRequestRules
+  seriesAutoRequestRules: AutoRequestRules
   // Language filters
   moviesLanguages: string[]
   moviesIncludeUnknownLanguage: boolean

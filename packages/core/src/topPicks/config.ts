@@ -7,6 +7,12 @@
 
 import { query, queryOne } from '../lib/db.js'
 import { createChildLogger } from '../lib/logger.js'
+import {
+  DEFAULT_AUTO_REQUEST_RULES,
+  parseAutoRequestRules,
+  readStoredAutoRequestRules,
+  type AutoRequestRules,
+} from './autoRequestRules.js'
 
 const logger = createChildLogger('top-picks-config')
 
@@ -97,6 +103,9 @@ export interface TopPicksConfig {
   autoRequestSeerrUserId: number | null
   /** Seasons requested by automatic TV requests: 'all' (default) or 'first' */
   seriesAutoRequestSeasons: SeriesAutoRequestSeasons
+  /** Auto-request rules (strategy, target count, content filters) per media type */
+  moviesAutoRequestRules: AutoRequestRules
+  seriesAutoRequestRules: AutoRequestRules
   // Language filters (ISO 639-1 codes, empty = all languages)
   moviesLanguages: string[]
   moviesIncludeUnknownLanguage: boolean
@@ -163,6 +172,8 @@ interface TopPicksConfigRow {
   auto_request_cron: string | null
   auto_request_seerr_user_id: number | null
   series_auto_request_seasons: string | null
+  movies_auto_request_rules: unknown
+  series_auto_request_rules: unknown
   // Language filters
   movies_languages: string[] | null
   movies_include_unknown_language: boolean | null
@@ -282,6 +293,8 @@ export async function getTopPicksConfig(): Promise<TopPicksConfig> {
       autoRequestCron: '0 0 * * 0',
       autoRequestSeerrUserId: null,
       seriesAutoRequestSeasons: 'all',
+      moviesAutoRequestRules: { ...DEFAULT_AUTO_REQUEST_RULES },
+      seriesAutoRequestRules: { ...DEFAULT_AUTO_REQUEST_RULES },
       moviesLanguages: [],
       moviesIncludeUnknownLanguage: true,
       seriesLanguages: [],
@@ -494,6 +507,14 @@ export async function updateTopPicksConfig(
     setClauses.push(`series_auto_request_seasons = $${paramIndex++}`)
     values.push(updates.seriesAutoRequestSeasons)
   }
+  if (updates.moviesAutoRequestRules !== undefined) {
+    setClauses.push(`movies_auto_request_rules = $${paramIndex++}::jsonb`)
+    values.push(JSON.stringify(parseAutoRequestRules(updates.moviesAutoRequestRules)))
+  }
+  if (updates.seriesAutoRequestRules !== undefined) {
+    setClauses.push(`series_auto_request_rules = $${paramIndex++}::jsonb`)
+    values.push(JSON.stringify(parseAutoRequestRules(updates.seriesAutoRequestRules)))
+  }
   // Language filters
   if (updates.moviesLanguages !== undefined) {
     setClauses.push(`movies_languages = $${paramIndex++}`)
@@ -601,6 +622,8 @@ export async function resetTopPicksConfig(): Promise<TopPicksConfig> {
       auto_request_cron = '0 0 * * 0',
       auto_request_seerr_user_id = NULL,
       series_auto_request_seasons = 'all',
+      movies_auto_request_rules = '{}'::jsonb,
+      series_auto_request_rules = '{}'::jsonb,
       movies_languages = '{}',
       movies_include_unknown_language = true,
       series_languages = '{}',
@@ -667,6 +690,8 @@ function mapRowToConfig(row: TopPicksConfigRow): TopPicksConfig {
     autoRequestCron: row.auto_request_cron || '0 0 * * 0',
     autoRequestSeerrUserId: row.auto_request_seerr_user_id ?? null,
     seriesAutoRequestSeasons: row.series_auto_request_seasons === 'first' ? 'first' : 'all',
+    moviesAutoRequestRules: readStoredAutoRequestRules(row.movies_auto_request_rules).rules,
+    seriesAutoRequestRules: readStoredAutoRequestRules(row.series_auto_request_rules).rules,
     moviesLanguages: row.movies_languages || [],
     moviesIncludeUnknownLanguage: row.movies_include_unknown_language ?? true,
     seriesLanguages: row.series_languages || [],
