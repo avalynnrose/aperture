@@ -94,7 +94,7 @@ function startMockSeerr(): Promise<void> {
 }
 
 // ---- helpers (core is imported lazily so a skipped run never needs a database) -----------------
-type Core = typeof import('./index.js')
+type Core = typeof import('../index.js')
 let core: Core
 let pool: { query: (sql: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> }
 const ids = (plan: { result: { selected: { tmdbId: number }[] } }) => plan.result.selected.map((e) => e.tmdbId)
@@ -124,7 +124,7 @@ before(async () => {
   if (!enabled) return
   installFakeTmdb()
   await startMockSeerr()
-  core = await import('./index.js')
+  core = await import('../index.js')
   const { query } = await import('../lib/db.js')
   pool = { query: (sql, params) => query(sql, params) as never }
   await core.setSeerrConfig({ url: seerr.url, apiKey: 'mock', enabled: true })
