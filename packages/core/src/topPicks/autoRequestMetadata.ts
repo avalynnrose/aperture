@@ -94,6 +94,11 @@ export class TitleMetadataCache {
     return this.entries.size
   }
 
+  clear(): void {
+    this.entries.clear()
+    this.inflight.clear()
+  }
+
   async get(key: string, load: () => Promise<TitleMetadata>): Promise<TitleMetadata> {
     const hit = this.entries.get(key)
     if (hit && this.now() - hit.at < this.ttlMs) return hit.value
@@ -117,6 +122,11 @@ export class TitleMetadataCache {
 }
 
 const sharedCache = new TitleMetadataCache()
+
+/** Drop all cached lookups (tests, or after changing the TMDB key). */
+export function clearTitleMetadataCache(): void {
+  sharedCache.clear()
+}
 
 export async function fetchTitleMetadata(
   mediaType: AutoRequestMediaType,
