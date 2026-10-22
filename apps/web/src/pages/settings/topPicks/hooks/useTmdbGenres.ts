@@ -6,7 +6,7 @@ export interface GenreOption {
 }
 
 /** TMDB genre list for one media type (movie and TV genre ids differ for some genres). */
-export export function useTmdbGenres(mediaType: 'movie' | 'tv'): { genres: GenreOption[]; error: boolean } {
+export function useTmdbGenres(mediaType: 'movie' | 'tv'): { genres: GenreOption[]; error: boolean } {
   const [genres, setGenres] = useState<GenreOption[]>([])
   const [error, setError] = useState(false)
   useEffect(() => {
