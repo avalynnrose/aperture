@@ -1250,6 +1250,67 @@ async function getExternalSeries(
 }
 
 /**
+ * One scored entry from the hybrid blend (local watch score + external list score).
+ * Both scores are normalized to 0-100 against the best entry on their own side.
+ */
+export interface BlendedEntry<T> {
+  item: T
+  key: string
+  localScore: number
+  externalScore: number
+  blended: number
+}
+
+/**
+ * Shared hybrid scoring used by the Top Picks display AND by auto-request ranking, so the two
+ * cannot drift apart. Returns every entry sorted by blended score (stable); callers slice/rank.
+ *
+ * An item with no entry on one side scores 0 there: a library title nobody has watched has local
+ * score 0, and a title that is not in the external list has external score 0.
+ */
+export function blendDetailed<T extends { popularityScore: number }>(
+  local: T[],
+  external: T[],
+  keyOf: (item: T) => string,
+  localWeight: number,
+  externalWeight: number
+): BlendedEntry<T>[] {
+  // Normalize scores to 0-100 scale
+  const maxLocalScore = Math.max(...local.map((m) => m.popularityScore), 1)
+  const maxExternalScore = Math.max(...external.map((m) => m.popularityScore), 1)
+
+  const scoreMap = new Map<string, { item: T; localScore: number; externalScore: number }>()
+
+  for (const item of local) {
+    scoreMap.set(keyOf(item), {
+      item,
+      localScore: (item.popularityScore / maxLocalScore) * 100,
+      externalScore: 0,
+    })
+  }
+
+  for (const item of external) {
+    const normalizedScore = (item.popularityScore / maxExternalScore) * 100
+    const existing = scoreMap.get(keyOf(item))
+    if (existing) {
+      existing.externalScore = normalizedScore
+    } else {
+      scoreMap.set(keyOf(item), { item, localScore: 0, externalScore: normalizedScore })
+    }
+  }
+
+  return Array.from(scoreMap.entries())
+    .map(([key, { item, localScore, externalScore }]) => ({
+      item,
+      key,
+      localScore,
+      externalScore,
+      blended: localScore * localWeight + externalScore * externalWeight,
+    }))
+    .sort((a, b) => b.blended - a.blended)
+}
+
+/**
  * Blend popularity scores from two sources (local + external)
  */
 function blendPopularityScores(
@@ -1259,53 +1320,9 @@ function blendPopularityScores(
   externalWeight: number,
   limit: number
 ): PopularMovie[] {
-  // Normalize scores to 0-100 scale
-  const maxLocalScore = Math.max(...local.map((m) => m.popularityScore), 1)
-  const maxExternalScore = Math.max(...external.map((m) => m.popularityScore), 1)
-
-  // Build lookup by movieId
-  const scoreMap = new Map<
-    string,
-    { movie: PopularMovie; localScore: number; externalScore: number }
-  >()
-
-  for (const movie of local) {
-    const normalizedScore = (movie.popularityScore / maxLocalScore) * 100
-    scoreMap.set(movie.movieId, {
-      movie,
-      localScore: normalizedScore,
-      externalScore: 0,
-    })
-  }
-
-  for (const movie of external) {
-    const normalizedScore = (movie.popularityScore / maxExternalScore) * 100
-    const existing = scoreMap.get(movie.movieId)
-    if (existing) {
-      existing.externalScore = normalizedScore
-    } else {
-      scoreMap.set(movie.movieId, {
-        movie,
-        localScore: 0,
-        externalScore: normalizedScore,
-      })
-    }
-  }
-
-  // Calculate blended scores and sort
-  const blended = Array.from(scoreMap.values())
-    .map(({ movie, localScore, externalScore }) => ({
-      ...movie,
-      popularityScore: localScore * localWeight + externalScore * externalWeight,
-    }))
-    .sort((a, b) => b.popularityScore - a.popularityScore)
+  return blendDetailed(local, external, (m) => m.movieId, localWeight, externalWeight)
     .slice(0, limit)
-
-  // Re-assign ranks
-  return blended.map((movie, index) => ({
-    ...movie,
-    rank: index + 1,
-  }))
+    .map((e, index) => ({ ...e.item, popularityScore: e.blended, rank: index + 1 }))
 }
 
 /**
@@ -1318,49 +1335,40 @@ function blendSeriesPopularityScores(
   externalWeight: number,
   limit: number
 ): PopularSeries[] {
-  const maxLocalScore = Math.max(...local.map((s) => s.popularityScore), 1)
-  const maxExternalScore = Math.max(...external.map((s) => s.popularityScore), 1)
-
-  const scoreMap = new Map<
-    string,
-    { series: PopularSeries; localScore: number; externalScore: number }
-  >()
-
-  for (const series of local) {
-    const normalizedScore = (series.popularityScore / maxLocalScore) * 100
-    scoreMap.set(series.seriesId, {
-      series,
-      localScore: normalizedScore,
-      externalScore: 0,
-    })
-  }
-
-  for (const series of external) {
-    const normalizedScore = (series.popularityScore / maxExternalScore) * 100
-    const existing = scoreMap.get(series.seriesId)
-    if (existing) {
-      existing.externalScore = normalizedScore
-    } else {
-      scoreMap.set(series.seriesId, {
-        series,
-        localScore: 0,
-        externalScore: normalizedScore,
-      })
-    }
-  }
-
-  const blended = Array.from(scoreMap.values())
-    .map(({ series, localScore, externalScore }) => ({
-      ...series,
-      popularityScore: localScore * localWeight + externalScore * externalWeight,
-    }))
-    .sort((a, b) => b.popularityScore - a.popularityScore)
+  return blendDetailed(local, external, (s) => s.seriesId, localWeight, externalWeight)
     .slice(0, limit)
+    .map((e, index) => ({ ...e.item, popularityScore: e.blended, rank: index + 1 }))
+}
 
-  return blended.map((series, index) => ({
-    ...series,
-    rank: index + 1,
-  }))
+/** Inputs of the displayed hybrid ranking, un-truncated, for auto-request ranking. */
+export interface HybridDisplayScores<T> {
+  entries: BlendedEntry<T>[]
+  localWeight: number
+  externalWeight: number
+}
+
+export async function getHybridDisplayScoresMovies(): Promise<HybridDisplayScores<PopularMovie>> {
+  const config = await getTopPicksConfig()
+  const count = config.moviesUseAllMatches ? 10000 : config.moviesCount
+  const localMovies = await getTopMoviesLocal()
+  const externalMovies = await getExternalMovies(config.moviesHybridExternalSource, count * 2)
+  return {
+    entries: blendDetailed(localMovies, externalMovies, (m) => m.movieId, config.hybridLocalWeight, config.hybridExternalWeight),
+    localWeight: config.hybridLocalWeight,
+    externalWeight: config.hybridExternalWeight,
+  }
+}
+
+export async function getHybridDisplayScoresSeries(): Promise<HybridDisplayScores<PopularSeries>> {
+  const config = await getTopPicksConfig()
+  const count = config.seriesUseAllMatches ? 10000 : config.seriesCount
+  const localSeries = await getTopSeriesLocal()
+  const externalSeries = await getExternalSeries(config.seriesHybridExternalSource, count * 2)
+  return {
+    entries: blendDetailed(localSeries, externalSeries, (s) => s.seriesId, config.hybridLocalWeight, config.hybridExternalWeight),
+    localWeight: config.hybridLocalWeight,
+    externalWeight: config.hybridExternalWeight,
+  }
 }
 
 // ============================================================================
