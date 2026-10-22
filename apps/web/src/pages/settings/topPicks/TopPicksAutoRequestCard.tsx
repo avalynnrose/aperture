@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Alert, Box, Card, CardContent, Collapse, FormControlLabel, Grid, MenuItem, Switch, TextField, Typography } from '@mui/material'
+import { Alert, Box, Button, Card, CardContent, Collapse, FormControlLabel, Grid, MenuItem, Switch, TextField, Typography } from '@mui/material'
+import PreviewIcon from '@mui/icons-material/Visibility'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'; import MovieIcon from '@mui/icons-material/Movie'; import SendIcon from '@mui/icons-material/Send'; import TvIcon from '@mui/icons-material/Tv'
 import { Trans, useTranslation } from 'react-i18next'
+import { AutoRequestPreviewDialog } from './AutoRequestPreviewDialog'
+import { AutoRequestRulesPanel } from './AutoRequestRulesPanel'
 import type { TopPicksConfig } from './types'
-export interface TopPicksAutoRequestCardProps { config: TopPicksConfig; updateConfig: (u: Partial<TopPicksConfig>) => void }
+export interface TopPicksAutoRequestCardProps { config: TopPicksConfig; updateConfig: (u: Partial<TopPicksConfig>) => void; hasChanges?: boolean }
 interface SeerrUserOption { id: number; name: string }
 type SeerrUsersState = { status: 'loading' } | { status: 'ready'; users: SeerrUserOption[] } | { status: 'not-configured' } | { status: 'error' }
 
@@ -29,8 +32,9 @@ function useSeerrUsers(): SeerrUsersState {
   return state
 }
 
-export function TopPicksAutoRequestCard({ config, updateConfig }: TopPicksAutoRequestCardProps) {
+export function TopPicksAutoRequestCard({ config, updateConfig, hasChanges = false }: TopPicksAutoRequestCardProps) {
   const { t } = useTranslation()
+  const [previewOpen, setPreviewOpen] = useState(false)
   const seerrUsers = useSeerrUsers()
   const requesterId = config.autoRequestSeerrUserId
   const knownUsers = seerrUsers.status === 'ready' ? seerrUsers.users : []
@@ -126,6 +130,14 @@ export function TopPicksAutoRequestCard({ config, updateConfig }: TopPicksAutoRe
                       }}
                       helperText={t('topPicksAdmin.autoRequest.moviesHelper')}
                     />
+                    <AutoRequestRulesPanel
+                      mediaType="movie"
+                      rules={config.moviesAutoRequestRules}
+                      onChange={(r) => updateConfig({ moviesAutoRequestRules: r })}
+                      perRunLimit={config.moviesAutoRequestLimit}
+                      sourceIsHybrid={config.moviesPopularitySource === 'hybrid'}
+                      disabled={!config.isEnabled}
+                    />
                   </Box>
                 </Collapse>
               </Card>
@@ -187,11 +199,34 @@ export function TopPicksAutoRequestCard({ config, updateConfig }: TopPicksAutoRe
                       <MenuItem value="all">{t('topPicksAdmin.autoRequest.seasonsAll')}</MenuItem>
                       <MenuItem value="first">{t('topPicksAdmin.autoRequest.seasonsFirst')}</MenuItem>
                     </TextField>
+                    <AutoRequestRulesPanel
+                      mediaType="tv"
+                      rules={config.seriesAutoRequestRules}
+                      onChange={(r) => updateConfig({ seriesAutoRequestRules: r })}
+                      perRunLimit={config.seriesAutoRequestLimit}
+                      sourceIsHybrid={config.seriesPopularitySource === 'hybrid'}
+                      disabled={!config.isEnabled}
+                    />
                   </Box>
                 </Collapse>
               </Card>
             </Grid>
           </Grid>
+
+          <Box sx={{ mt: 3, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+            <Button
+              variant="outlined"
+              startIcon={<PreviewIcon />}
+              onClick={() => setPreviewOpen(true)}
+              disabled={!config.isEnabled}
+            >
+              {t('topPicksAdmin.autoRequest.preview.button')}
+            </Button>
+            <Typography variant="caption" color="text.secondary">
+              {t('topPicksAdmin.autoRequest.preview.buttonHelp')}
+            </Typography>
+          </Box>
+          <AutoRequestPreviewDialog open={previewOpen} onClose={() => setPreviewOpen(false)} hasUnsavedChanges={hasChanges} />
         </CardContent>
       </Card>
   )

@@ -6,6 +6,7 @@ import {
   fetchTitleMetadata,
   parseMovieMetadata,
   parseTvMetadata,
+  searchTmdbKeywords,
   type RawLookup,
 } from './autoRequestMetadata.js'
 
@@ -72,4 +73,14 @@ test('concurrent lookups for the same title share one request', async () => {
   const c = { tmdbId: 3, title: 'x', year: null, rank: 1, inLibrary: false }
   await Promise.all([get(c), get(c), get(c)])
   assert.equal(calls, 1)
+})
+
+test('keyword search: short queries do no lookup, results are id+name, failures are reported not hidden', async () => {
+  let calls = 0
+  const ok: RawLookup = async (e) => { calls++; assert.match(e, /^\/search\/keyword\?query=anime&page=1$/); return { outcome: 'ok', data: { results: [{ id: 210024, name: 'anime', extra: 1 }] } } }
+  assert.deepEqual(await searchTmdbKeywords('a', ok), { ok: true, results: [] })
+  assert.equal(calls, 0)
+  assert.deepEqual(await searchTmdbKeywords(' anime ', ok), { ok: true, results: [{ id: 210024, name: 'anime' }] })
+  const bad: RawLookup = async () => ({ outcome: 'error', message: 'HTTP 401' })
+  assert.deepEqual(await searchTmdbKeywords('anime', bad), { ok: false, reason: 'error', message: 'HTTP 401' })
 })

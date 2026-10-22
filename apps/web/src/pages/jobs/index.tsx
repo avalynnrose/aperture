@@ -10,7 +10,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import { useJobsData, useEnrichmentStatus, useDiscoveryPrerequisites } from './hooks'
 import { MOVIE_JOB_CATEGORIES, SERIES_JOB_CATEGORIES, GLOBAL_JOB_CATEGORIES } from './constants'
-import { JobCard, JobConfigDialog, JobHistoryDialog, CancelDialog, LoadingSkeleton, ScheduleTable } from './components'
+import { JobCard, JobConfigDialog, JobHistoryDialog, CancelDialog, AutoRequestRunDialog, LoadingSkeleton, ScheduleTable } from './components'
 import type { JobCategory } from './types'
 
 interface TabPanelProps {
@@ -140,7 +140,7 @@ export function JobsPage() {
     cancellingJobs,
     logsContainerRefs,
     runningCount,
-    handleRunJob,
+    handleRunJob: runJobRaw,
     handleCancelJob,
     handleUpdateConfig,
     toggleLogs,
@@ -168,6 +168,16 @@ export function JobsPage() {
     } finally {
       setClearingInterrupted(false)
     }
+  }
+
+  // A manual auto-request run makes real Seerr requests, so ask first (the scheduler is unaffected).
+  const [autoRequestRunPending, setAutoRequestRunPending] = useState(false)
+  const handleRunJob = async (jobName: string) => {
+    if (jobName === 'auto-request-top-picks') {
+      setAutoRequestRunPending(true)
+      return
+    }
+    await runJobRaw(jobName)
   }
 
   // Handle running enrichment to resume from interrupted state
@@ -446,6 +456,16 @@ export function JobsPage() {
           }}
         />
       </TabPanel>
+
+      {/* Manual auto-request run: explicit confirmation */}
+      <AutoRequestRunDialog
+        open={autoRequestRunPending}
+        onClose={() => setAutoRequestRunPending(false)}
+        onConfirm={() => {
+          setAutoRequestRunPending(false)
+          void runJobRaw('auto-request-top-picks', { confirm: true })
+        }}
+      />
 
       {/* Cancel Confirmation Dialog */}
       <CancelDialog
