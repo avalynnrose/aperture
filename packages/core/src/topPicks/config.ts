@@ -5,6 +5,7 @@
  * based on aggregated watch history from all users.
  */
 
+import { assertValidRequesterId, assertValidSeasonMode } from './autoRequestOptions.js'
 import { query, queryOne } from '../lib/db.js'
 import { createChildLogger } from '../lib/logger.js'
 import {
@@ -494,16 +495,12 @@ export async function updateTopPicksConfig(
   }
   if (updates.autoRequestSeerrUserId !== undefined) {
     const id = updates.autoRequestSeerrUserId
-    if (id !== null && (!Number.isInteger(id) || id <= 0)) {
-      throw new Error('autoRequestSeerrUserId must be a positive integer or null')
-    }
+    assertValidRequesterId(id)
     setClauses.push(`auto_request_seerr_user_id = $${paramIndex++}`)
     values.push(id)
   }
   if (updates.seriesAutoRequestSeasons !== undefined) {
-    if (updates.seriesAutoRequestSeasons !== 'all' && updates.seriesAutoRequestSeasons !== 'first') {
-      throw new Error("seriesAutoRequestSeasons must be 'all' or 'first'")
-    }
+    assertValidSeasonMode(updates.seriesAutoRequestSeasons)
     setClauses.push(`series_auto_request_seasons = $${paramIndex++}`)
     values.push(updates.seriesAutoRequestSeasons)
   }

@@ -818,6 +818,7 @@ export {
   getTVDetails as getSeerrTVDetails,
   getMediaStatus as getSeerrMediaStatus,
   listAllSeerrUsers,
+  seerrUserLabel,
   matchApertureProfileToSeerrUser,
   resolveSeerrUserIdForProfile,
   // Request Management
