@@ -210,16 +210,19 @@ export async function selectAutoRequests(
     rules.strategy === 'strict'
       ? Math.min(target, ranked.length)
       : Math.min(rules.maxCandidates, ranked.length)
-  // Fill stops as soon as enough titles are eligible to satisfy the target and the cap.
+  // Fill/legacy stop as soon as enough titles are found to satisfy the target and the cap.
   const stopAt = Math.min(target, perRunCap)
 
   const entries: PlanEntry[] = []
   const seen = new Set<number>()
   let eligible = 0
   let evaluated = 0
+  // legacy: slots used by titles we will request plus titles already requested in Seerr
+  let slots = 0
 
   for (let i = 0; i < windowSize; i++) {
     if (rules.strategy === 'fill' && eligible >= stopAt) break
+    if (rules.strategy === 'legacy' && slots >= stopAt) break
     const c = ranked[i]
     evaluated++
     const base = {
@@ -260,6 +263,7 @@ export async function selectAutoRequests(
     const requested = await deps.isRequested(c)
     if (requested === true) {
       finish('skipped', [{ code: 'already-requested' }], { requested: true })
+      slots++
       continue
     }
     if (requested === 'unknown') {
@@ -285,6 +289,7 @@ export async function selectAutoRequests(
     }
 
     eligible++
+    slots++
     if (eligible <= perRunCap) finish('selected', [], common)
     else finish('over-cap', [{ code: 'cap-reached' }], common)
   }
@@ -307,8 +312,14 @@ export async function selectAutoRequests(
       uncertain: count('uncertain'),
       overCap: count('over-cap'),
       exhausted:
-        rules.strategy === 'fill' && eligible < stopAt && evaluated === ranked.length && ranked.length < rules.maxCandidates,
-      depthCapped: rules.strategy === 'fill' && eligible < stopAt && evaluated >= rules.maxCandidates,
+        rules.strategy !== 'strict' &&
+        (rules.strategy === 'fill' ? eligible : slots) < stopAt &&
+        evaluated === ranked.length &&
+        ranked.length < rules.maxCandidates,
+      depthCapped:
+        rules.strategy !== 'strict' &&
+        (rules.strategy === 'fill' ? eligible : slots) < stopAt &&
+        evaluated >= rules.maxCandidates,
     },
   }
 }

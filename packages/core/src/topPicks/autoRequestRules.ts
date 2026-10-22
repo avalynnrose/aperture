@@ -7,7 +7,7 @@
  */
 import { z } from 'zod'
 
-export type SelectionStrategy = 'strict' | 'fill'
+export type SelectionStrategy = 'legacy' | 'strict' | 'fill'
 export type RankBasis = 'external' | 'blended'
 export type CountryMode = 'exclude' | 'include'
 export type CountryMatch = 'any' | 'all'
@@ -21,6 +21,9 @@ export interface KeywordRef {
 
 export interface AutoRequestRules {
   /**
+   * legacy: the behavior from before these rules existed and the default. Take the first N titles
+   *         that are missing from the library; titles already requested in Seerr use up a slot and
+   *         are skipped WITHOUT being replaced.
    * strict: only the first N ranked titles are evaluated (requests may be fewer than N, even zero).
    * fill:   keep walking down the ranking until N eligible titles are found or the depth cap is hit.
    */
@@ -53,7 +56,7 @@ export interface AutoRequestRules {
 }
 
 export const DEFAULT_AUTO_REQUEST_RULES: AutoRequestRules = {
-  strategy: 'fill',
+  strategy: 'legacy',
   targetCount: null,
   maxCandidates: 200,
   rankBasis: 'external',
@@ -70,7 +73,7 @@ const uniqueSorted = <T extends number | string>(xs: T[]): T[] =>
 
 export const AutoRequestRulesSchema = z
   .object({
-    strategy: z.enum(['strict', 'fill']).default('fill'),
+    strategy: z.enum(['legacy', 'strict', 'fill']).default('legacy'),
     targetCount: z.number().int().min(1).max(100).nullable().default(null),
     maxCandidates: z.number().int().min(10).max(500).default(200),
     rankBasis: z.enum(['external', 'blended']).default('external'),

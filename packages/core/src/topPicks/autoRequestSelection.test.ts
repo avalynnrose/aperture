@@ -210,6 +210,29 @@ test('selection is deterministic: identical input gives identical output (previe
   assert.deepEqual(a, b)
 })
 
+test('legacy (default): first N missing titles; requested ones use a slot and are not replaced; owned are skipped free', async () => {
+  // ranks 1-2 owned (free), 3-5 missing but already requested (use 3 slots), 6.. missing
+  const list = ranked(30, (r) => ({ inLibrary: r <= 2 }))
+  const f: Fakes = { requested: new Set([1003, 1004, 1005]) }
+  const r = await selectAutoRequests(list, rules({ strategy: 'legacy', targetCount: null }), { perRunCap: 5 }, deps(f).d)
+  assert.deepEqual(ids(r), [6, 7])
+  // the same list under fill replaces the requested ones and reaches N
+  const fill = await selectAutoRequests(list, rules({ strategy: 'fill', targetCount: 5 }), { perRunCap: 5 }, deps(f).d)
+  assert.deepEqual(ids(fill), [6, 7, 8, 9, 10])
+})
+
+test('legacy: filters never use slots; excluded titles are skipped and the walk continues', async () => {
+  const meta = new Map<number, TitleMetadata>([[1001, { status: 'ok', countries: ['JP'] }]])
+  const rl = parseAutoRequestRules({ strategy: 'legacy', countries: { codes: ['JP'] } })
+  const r = await selectAutoRequests(ranked(10), rl, { perRunCap: 3 }, deps({ meta }).d)
+  assert.deepEqual(ids(r), [2, 3, 4])
+})
+
+test('rules default to legacy so existing installs keep their effective behavior', () => {
+  assert.equal(parseAutoRequestRules({}).strategy, 'legacy')
+  assert.equal(DEFAULT_AUTO_REQUEST_RULES.strategy, 'legacy')
+})
+
 test('rules parsing: defaults, normalization and rejection of bad input', () => {
   const p = parseAutoRequestRules({})
   assert.deepEqual(p, DEFAULT_AUTO_REQUEST_RULES)
