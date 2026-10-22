@@ -250,3 +250,25 @@ This data comes from your server regardless of popularity source.
 ---
 
 **Previous:** [Algorithm Tuning](algorithm-tuning.md) | **Next:** [Shows You Watch Configuration](shows-you-watch.md)
+
+## Auto-Request (Seerr)
+
+Top Picks can automatically request titles that are missing from your library through Seerr. Enable it per media type in **Settings → Top Picks → Auto-Request Missing Content** and choose a maximum number of requests per run.
+
+> **Fork note:** the two settings below exist only in this fork; their defaults match upstream behavior.
+
+### Top Picks Requester
+
+Choose which Seerr user account is credited with automatic requests (movies and TV).
+
+- **Default:** *Default (Seerr API key account)*. No user is sent, which is upstream behavior.
+- The dropdown lists Seerr users by name; Aperture stores the selected user's Seerr ID. It needs Seerr configured with an **admin** API key, because Seerr only honors a requesting user from an admin key.
+- If the saved user no longer exists in Seerr, the dropdown shows *Unavailable user (ID n)* with a warning, and the auto-request job stops with an error instead of requesting as a different account. If Seerr cannot be reached, the job also stops. The saved selection is never changed automatically.
+
+### TV seasons to request
+
+- **All seasons (default):** upstream behavior.
+- **Season 1 only:** automatic TV requests ask for the first season only.
+
+This is independent of the requester setting. Manual requests and Discover requests are not affected by either setting.
+

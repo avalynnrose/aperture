@@ -39,4 +39,4 @@ export {
   matchApertureProfileToSeerrUser,
   type ApertureUserProfileForSeerr,
 } from './userMapping.js'
-
+export { seerrUserLabel, type SeerrUserNames } from './userLabel.js'

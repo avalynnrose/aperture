@@ -13,6 +13,8 @@
 > This fork is not officially affiliated with or supported by the original Aperture project. Updates and support are provided on a best-effort basis.
 >
 > Upstream project: [dgruhin-hrizn/aperture](https://github.com/dgruhin-hrizn/aperture) (AGPL-3.0; see [LICENSE](LICENSE)). Fork changes are listed in [Fork Changes](#fork-changes).
+>
+> Released images are built from tagged commits of this repository (for example `v0.7.10-fork.1`); the tag identifies the exact corresponding source.
 
 **Aperture** — AI-powered media recommendations for Emby & Jellyfin.
 
