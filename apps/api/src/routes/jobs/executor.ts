@@ -41,7 +41,12 @@ import { activeJobs } from './state.js'
 
 const logger = createChildLogger('jobs-executor')
 
-export async function runJob(name: string, jobId: string): Promise<void> {
+export interface RunJobOptions {
+  /** auto-request-top-picks: plans the caller already verified (manual run after a confirmed preview) */
+  autoRequestPlans?: Partial<Record<'movie' | 'tv', import('@aperture/core').AutoRequestPlan>>
+}
+
+export async function runJob(name: string, jobId: string, options: RunJobOptions = {}): Promise<void> {
   const startTime = Date.now()
 
   try {
@@ -244,7 +249,7 @@ export async function runJob(name: string, jobId: string): Promise<void> {
       }
       case 'auto-request-top-picks': {
         const { runAutoRequestJob } = await import('@aperture/core')
-        const result = await runAutoRequestJob(jobId)
+        const result = await runAutoRequestJob(jobId, { plans: options.autoRequestPlans })
         logger.info(
           {
             job: name,

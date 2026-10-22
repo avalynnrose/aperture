@@ -6,7 +6,6 @@ name: CI checks (fork)
 
 on:
   pull_request:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -38,10 +37,27 @@ jobs:
       PGPASSWORD: ci-throwaway
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
+
+      - name: Public-content check (no private addresses, emails or tokens in added lines)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          # This repository is public. Added lines must not contain private IP addresses, personal
+          # email addresses, secret-looking tokens or private keys. GitHub no-reply and example
+          # addresses are fine. This workflow file is excluded because it contains the patterns.
+          hits=$(git diff -U0 "origin/$BASE_REF"...HEAD -- . ':!pnpm-lock.yaml' ':!.github/workflows/ci-checks.yml' \
+            | grep '^+' | grep -v '^+++' \
+            | grep -n -E '(^|[^0-9])(192\.168\.|10\.[0-9]+\.[0-9]+\.[0-9]+|172\.(1[6-9]|2[0-9]|3[01])\.)|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|ghp_[A-Za-z0-9]{20,}|github_pat_|BEGIN [A-Z ]*PRIVATE KEY' \
+            | grep -v -i -E 'noreply@|@example\.(com|invalid)|@users\.noreply' || true)
+          if [ -n "$hits" ]; then echo "Possible private content in added lines:"; echo "$hits"; exit 1; fi
+          echo "no private addresses, emails or tokens in added lines"
 
       - name: Install
         run: |
@@ -68,3 +84,10 @@ jobs:
           done
           psql -h localhost -U postgres -d ci -Atc "select auto_request_seerr_user_id is null, series_auto_request_seasons from top_picks_config" | tee defaults.txt
           test "$(cat defaults.txt)" = "t|all"
+          test "$(psql -h localhost -U postgres -d ci -Atc "select movies_auto_request_rules = '{}'::jsonb and series_auto_request_rules = '{}'::jsonb from top_picks_config")" = "t"
+
+      - name: Auto-request integration tests (Postgres + mock Seerr + fake TMDB)
+        env:
+          DATABASE_URL: postgres://postgres:ci-throwaway@localhost:5432/ci
+          AR_INTEGRATION: '1'
+        run: pnpm --filter @aperture/core exec node --import tsx --test src/topPicks/autoRequest.integration.test.ts

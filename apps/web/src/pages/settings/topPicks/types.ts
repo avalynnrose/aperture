@@ -15,6 +15,17 @@ export type HybridExternalSource =
   | 'tmdb_top_rated'
   | 'mdblist'
 
+export interface AutoRequestRules {
+  strategy: 'legacy' | 'strict' | 'fill'
+  targetCount: number | null
+  maxCandidates: number
+  rankBasis: 'external' | 'blended'
+  countries: { mode: 'exclude' | 'include'; codes: string[]; match: 'any' | 'all' }
+  excludedGenreIds: number[]
+  excludedKeywords: { id: number; name: string }[]
+  missingMetadata: 'skip' | 'allow'
+}
+
 export interface TopPicksConfig {
   isEnabled: boolean
   // Movies-specific settings
@@ -74,6 +85,9 @@ export interface TopPicksConfig {
   autoRequestSeerrUserId: number | null
   // Seasons requested by automatic TV requests
   seriesAutoRequestSeasons: 'all' | 'first'
+  // Auto-request rules (strategy, target count, content filters) per media type
+  moviesAutoRequestRules: AutoRequestRules
+  seriesAutoRequestRules: AutoRequestRules
   // Language filters
   moviesLanguages: string[]
   moviesIncludeUnknownLanguage: boolean
@@ -143,4 +157,65 @@ export interface MediaLibraryPreviewState {
   matchLoading: boolean
   matchExpanded: boolean
   setMatchExpanded: (expanded: boolean) => void
+}
+
+// ---- Auto-request preview (shape of POST /api/settings/top-picks/auto-request/preview) ----
+
+export type AutoRequestDecision = 'selected' | 'skipped' | 'excluded' | 'uncertain' | 'over-cap'
+
+export interface AutoRequestReason {
+  code: string
+  detail?: string
+}
+
+export interface AutoRequestPlanEntry {
+  rank: number
+  tmdbId: number
+  title: string
+  year: number | null
+  inLibrary: boolean
+  requested: boolean | 'unknown' | null
+  decision: AutoRequestDecision
+  reasons: AutoRequestReason[]
+  countries: string[] | null
+  genreIds: number[] | null
+  matchedKeywords: { id: number; name: string }[]
+  scores?: { local: number; external: number; blended: number }
+}
+
+export interface AutoRequestPlanSummary {
+  strategy: AutoRequestRules['strategy'] | 'legacy'
+  targetCount: number
+  perRunCap: number
+  windowSize: number
+  evaluated: number
+  notEvaluated: number
+  exhausted: boolean
+  depthCapped: boolean
+  selected: number
+  skipped: number
+  excluded: number
+  uncertain: number
+  overCap: number
+}
+
+export interface AutoRequestPlanView {
+  mediaType: 'movie' | 'tv'
+  generatedAt: string
+  enabled: boolean
+  popularitySource: string
+  externalSource: string | null
+  rankBasis: 'external' | 'blended'
+  perRunCap: number
+  targetCount: number
+  candidateCount: number
+  warnings: string[]
+  planId: string
+  result: { entries: AutoRequestPlanEntry[]; summary: AutoRequestPlanSummary }
+}
+
+export interface AutoRequestPreviewResponse {
+  generatedAt: string
+  staleAfterSeconds: number
+  plans: AutoRequestPlanView[]
 }

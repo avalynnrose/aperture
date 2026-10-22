@@ -1,7 +1,11 @@
 /**
  * Top Picks Auto-Request Job
- * 
- * Automatically requests missing Top Picks content via Seerr
+ *
+ * Automatically requests missing Top Picks content via Seerr.
+ *
+ * Which titles are requested is decided by the shared plan (autoRequestPlan.ts), the same code the
+ * admin preview uses. This file only runs a plan: it re-checks each title's request status right
+ * before requesting it and creates the requests.
  */
 
 import { createChildLogger } from '../lib/logger.js'
@@ -14,15 +18,19 @@ import {
   failJob,
 } from '../jobs/progress.js'
 import { getTopPicksConfig } from './config.js'
-import { 
-  isSeerrConfigured, 
-  createRequest, 
+import {
+  isSeerrConfigured,
+  createRequest,
   listAllSeerrUsers,
   getMediaStatus,
 } from '../seerr/index.js'
-import { query } from '../lib/db.js'
 import { buildAutoRequestOptions, resolveRequester } from './autoRequestOptions.js'
-import type { TMDbMovieResult, TMDbTVResult } from '../tmdb/index.js'
+import {
+  planAutoRequests,
+  type AutoRequestMediaType,
+  type AutoRequestPlan,
+} from './autoRequestPlan.js'
+import type { PlanEntry } from './autoRequestSelection.js'
 
 const logger = createChildLogger('top-picks-auto-request')
 
@@ -35,222 +43,93 @@ export interface AutoRequestResult {
   jobId: string
 }
 
-interface ExternalItem {
-  tmdbId: number
-  title: string
-  year: number | null
-  originalLanguage: string | null
+export interface RunAutoRequestOptions {
+  /** Plans the caller already built and verified (manual run after a confirmed preview). */
+  plans?: Partial<Record<AutoRequestMediaType, AutoRequestPlan>>
 }
 
-/**
- * Get missing movies from the configured source
- * Returns items with TMDB IDs that are NOT in the local library
- * Applies language filters from config
- */
-async function getMissingMovies(limit: number): Promise<ExternalItem[]> {
-  const config = await getTopPicksConfig()
-  const source = config.moviesPopularitySource
-  
-  // For emby_history, there's nothing "missing" - it only shows local content
-  if (source === 'emby_history') {
-    return []
-  }
-  
-  // Determine which source to use
-  let externalSource = source
-  if (source === 'hybrid') {
-    externalSource = config.moviesHybridExternalSource
-  }
-  
-  // Get language filter settings
-  const languages = config.moviesLanguages || []
-  const includeUnknownLanguage = config.moviesIncludeUnknownLanguage ?? true
-  
-  // Fetch from external source
-  let externalItems: ExternalItem[] = []
-  
-  if (externalSource === 'mdblist' && config.mdblistMoviesListId) {
-    // For MDBList, we need to fetch the raw list and get TMDB IDs
-    // MDBList doesn't provide language, so we'll need to look it up from TMDB if filtering
-    const { getListItems } = await import('../mdblist/index.js')
-    const items = await getListItems(config.mdblistMoviesListId, { 
-      limit: limit * 3, 
-      sort: config.mdblistMoviesSort 
-    })
-    externalItems = items
-      .filter(item => item.tmdbid)
-      .map(item => ({
-        tmdbId: item.tmdbid!,
-        title: item.title || 'Unknown',
-        year: item.year || null,
-        originalLanguage: null, // MDBList doesn't provide language
-      }))
-  } else if (externalSource?.startsWith('tmdb_')) {
-    // For TMDB sources, fetch directly
-    const {
-      getPopularMoviesBatch,
-      getTrendingMoviesBatch,
-      getTopRatedMoviesBatch,
-    } = await import('../tmdb/index.js')
-    
-    const maxPages = Math.ceil((limit * 3) / 20)
-    let tmdbMovies: TMDbMovieResult[] = []
-    
-    switch (externalSource) {
-      case 'tmdb_popular':
-        tmdbMovies = await getPopularMoviesBatch(maxPages)
-        break
-      case 'tmdb_trending_day':
-        tmdbMovies = await getTrendingMoviesBatch('day', maxPages)
-        break
-      case 'tmdb_trending_week':
-        tmdbMovies = await getTrendingMoviesBatch('week', maxPages)
-        break
-      case 'tmdb_top_rated':
-        tmdbMovies = await getTopRatedMoviesBatch(maxPages)
-        break
-    }
-    
-    externalItems = tmdbMovies.map(m => ({
-      tmdbId: m.id,
-      title: m.title,
-      year: m.release_date ? parseInt(m.release_date.split('-')[0]) : null,
-      originalLanguage: m.original_language || null,
-    }))
-  }
-  
-  if (externalItems.length === 0) {
-    return []
-  }
-  
-  // Apply language filter if configured
-  if (languages.length > 0) {
-    externalItems = externalItems.filter(item => {
-      if (!item.originalLanguage) {
-        return includeUnknownLanguage
-      }
-      return languages.includes(item.originalLanguage)
-    })
-    logger.debug({ languages, includeUnknownLanguage, filteredCount: externalItems.length }, 'Applied language filter to movies for auto-request')
-  }
-  
-  // Check which items are NOT in our library
-  const tmdbIds = externalItems.map(i => String(i.tmdbId))
-  const existingResult = await query<{ tmdb_id: string }>(
-    `SELECT tmdb_id FROM movies WHERE tmdb_id = ANY($1)`,
-    [tmdbIds]
-  )
-  const existingTmdbIds = new Set(existingResult.rows.map(r => r.tmdb_id))
-  
-  // Return items not in library, up to limit
-  return externalItems
-    .filter(item => !existingTmdbIds.has(String(item.tmdbId)))
-    .slice(0, limit)
+const MAX_LOGGED_ENTRIES = 60
+
+function describeEntry(e: PlanEntry): string {
+  const reasons = e.reasons.map((r) => (r.detail ? `${r.code}:${r.detail}` : r.code)).join(', ')
+  const year = e.year ? ` (${e.year})` : ''
+  return `#${e.rank} "${e.title}"${year} -> ${e.decision}${reasons ? ` [${reasons}]` : ''}`
 }
 
-/**
- * Get missing series from the configured source
- * Applies language filters from config
- */
-async function getMissingSeries(limit: number): Promise<ExternalItem[]> {
-  const config = await getTopPicksConfig()
-  const source = config.seriesPopularitySource
-  
-  if (source === 'emby_history') {
-    return []
-  }
-  
-  let externalSource = source
-  if (source === 'hybrid') {
-    externalSource = config.seriesHybridExternalSource
-  }
-  
-  // Get language filter settings
-  const languages = config.seriesLanguages || []
-  const includeUnknownLanguage = config.seriesIncludeUnknownLanguage ?? true
-  
-  let externalItems: ExternalItem[] = []
-  
-  if (externalSource === 'mdblist' && config.mdblistSeriesListId) {
-    const { getListItems } = await import('../mdblist/index.js')
-    const items = await getListItems(config.mdblistSeriesListId, { 
-      limit: limit * 3, 
-      sort: config.mdblistSeriesSort 
-    })
-    externalItems = items
-      .filter(item => item.tmdbid)
-      .map(item => ({
-        tmdbId: item.tmdbid!,
-        title: item.title || 'Unknown',
-        year: item.year || null,
-        originalLanguage: null, // MDBList doesn't provide language
-      }))
-  } else if (externalSource?.startsWith('tmdb_')) {
-    const {
-      getPopularTVBatch,
-      getTrendingTVBatch,
-      getTopRatedTVBatch,
-    } = await import('../tmdb/index.js')
-    
-    const maxPages = Math.ceil((limit * 3) / 20)
-    let tmdbSeries: TMDbTVResult[] = []
-    
-    switch (externalSource) {
-      case 'tmdb_popular':
-        tmdbSeries = await getPopularTVBatch(maxPages)
-        break
-      case 'tmdb_trending_day':
-        tmdbSeries = await getTrendingTVBatch('day', maxPages)
-        break
-      case 'tmdb_trending_week':
-        tmdbSeries = await getTrendingTVBatch('week', maxPages)
-        break
-      case 'tmdb_top_rated':
-        tmdbSeries = await getTopRatedTVBatch(maxPages)
-        break
-    }
-    
-    externalItems = tmdbSeries.map(s => ({
-      tmdbId: s.id,
-      title: s.name,
-      year: s.first_air_date ? parseInt(s.first_air_date.split('-')[0]) : null,
-      originalLanguage: s.original_language || null,
-    }))
-  }
-  
-  if (externalItems.length === 0) {
-    return []
-  }
-  
-  // Apply language filter if configured
-  if (languages.length > 0) {
-    externalItems = externalItems.filter(item => {
-      if (!item.originalLanguage) {
-        return includeUnknownLanguage
-      }
-      return languages.includes(item.originalLanguage)
-    })
-    logger.debug({ languages, includeUnknownLanguage, filteredCount: externalItems.length }, 'Applied language filter to series for auto-request')
-  }
-  
-  // Check which items are NOT in our library
-  const tmdbIds = externalItems.map(i => String(i.tmdbId))
-  const existingResult = await query<{ tmdb_id: string }>(
-    `SELECT tmdb_id FROM series WHERE tmdb_id = ANY($1)`,
-    [tmdbIds]
+/** Log the plan so a run can be audited afterwards: every ranked title with its original rank. */
+function logPlan(jobId: string, label: string, plan: AutoRequestPlan): void {
+  const s = plan.result.summary
+  addLog(
+    jobId,
+    'info',
+    `📋 ${label} plan: strategy ${s.strategy}, target ${s.targetCount}, cap ${s.perRunCap}, rank basis ${plan.rankBasis}; ` +
+      `evaluated ${s.evaluated}, selected ${s.selected}, skipped ${s.skipped}, excluded ${s.excluded}, uncertain ${s.uncertain}, over cap ${s.overCap}` +
+      (s.exhausted ? ' (ranking exhausted before reaching the target)' : '') +
+      (s.depthCapped ? ' (depth cap reached before reaching the target)' : '')
   )
-  const existingTmdbIds = new Set(existingResult.rows.map(r => r.tmdb_id))
-  
-  return externalItems
-    .filter(item => !existingTmdbIds.has(String(item.tmdbId)))
-    .slice(0, limit)
+  for (const w of plan.warnings) addLog(jobId, 'warn', `⚠️ ${w}`)
+  const interesting = plan.result.entries.filter((e) => e.decision !== 'skipped')
+  for (const e of interesting.slice(0, MAX_LOGGED_ENTRIES)) {
+    addLog(jobId, e.decision === 'uncertain' ? 'warn' : 'info', `   ${describeEntry(e)}`)
+  }
+  if (interesting.length > MAX_LOGGED_ENTRIES) {
+    addLog(jobId, 'info', `   ... and ${interesting.length - MAX_LOGGED_ENTRIES} more`)
+  }
+}
+
+interface RequestSettings {
+  requesterUserId: number | null
+  seriesSeasons: 'all' | 'first'
+}
+
+/** Create the requests for a plan's selected titles. This is the only place requests are made. */
+async function executePlan(
+  jobId: string,
+  plan: AutoRequestPlan,
+  settings: RequestSettings,
+  tally: { requested: number; skipped: number },
+  errors: string[]
+): Promise<void> {
+  const label = plan.mediaType === 'movie' ? 'Movie' : 'Series'
+  for (const entry of plan.result.selected) {
+    try {
+      // Re-check right before requesting; the request state can change after planning.
+      const status = await getMediaStatus(entry.tmdbId, plan.mediaType)
+      if (status?.requested) {
+        addLog(jobId, 'info', `⏭️ "${entry.title}" already requested`)
+        tally.skipped++
+        continue
+      }
+
+      const requestResult = await createRequest(
+        entry.tmdbId,
+        plan.mediaType,
+        buildAutoRequestOptions(plan.mediaType, settings)
+      )
+      if (requestResult.success) {
+        addLog(jobId, 'info', `✅ Requested "${entry.title}" (${entry.year}) [rank #${entry.rank}]`)
+        tally.requested++
+      } else {
+        addLog(jobId, 'warn', `⚠️ Failed to request "${entry.title}": ${requestResult.message}`)
+        tally.skipped++
+      }
+
+      // Small delay between requests
+      await new Promise((resolve) => setTimeout(resolve, 500))
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'Unknown error'
+      addLog(jobId, 'error', `❌ Error requesting "${entry.title}": ${error}`)
+      errors.push(`${label} "${entry.title}": ${error}`)
+    }
+  }
 }
 
 /**
  * Run the auto-request job
  */
 export async function runAutoRequestJob(
-  existingJobId?: string
+  existingJobId?: string,
+  options: RunAutoRequestOptions = {}
 ): Promise<AutoRequestResult> {
   const jobId = existingJobId || randomUUID()
   createJobProgress(jobId, 'auto-request-top-picks', 5)
@@ -267,15 +146,15 @@ export async function runAutoRequestJob(
   try {
     // Step 1: Check configuration
     setJobStep(jobId, 0, 'Checking configuration')
-    
+
     const config = await getTopPicksConfig()
-    
+
     if (!config.moviesAutoRequestEnabled && !config.seriesAutoRequestEnabled) {
       addLog(jobId, 'info', '⏭️ Auto-request is disabled for both movies and series')
       completeJob(jobId, { ...result })
       return result
     }
-    
+
     // Check Seerr configuration
     const seerrConfigured = await isSeerrConfigured()
     if (!seerrConfigured) {
@@ -283,7 +162,7 @@ export async function runAutoRequestJob(
       completeJob(jobId, { ...result })
       return result
     }
-    
+
     // Resolve the configured requester (Top Picks Requester setting) before requesting anything.
     // A deleted or unverifiable user stops the job; we never fall back to another account.
     const requester = resolveRequester(
@@ -300,7 +179,7 @@ export async function runAutoRequestJob(
       failJob(jobId, reason)
       return result
     }
-    const requestSettings = {
+    const requestSettings: RequestSettings = {
       requesterUserId: requester.status === 'ok' ? requester.userId : null,
       seriesSeasons: config.seriesAutoRequestSeasons,
     }
@@ -313,83 +192,30 @@ export async function runAutoRequestJob(
     addLog(jobId, 'info', `🎬 Movies auto-request: ${config.moviesAutoRequestEnabled ? `enabled (limit: ${config.moviesAutoRequestLimit})` : 'disabled'}`)
     addLog(jobId, 'info', `📺 Series auto-request: ${config.seriesAutoRequestEnabled ? `enabled (limit: ${config.seriesAutoRequestLimit})` : 'disabled'}`)
 
-    // Step 2: Get missing movies
+    // Steps 2-3: movies
     setJobStep(jobId, 1, 'Finding missing movies')
-    
     if (config.moviesAutoRequestEnabled) {
-      addLog(jobId, 'info', '🔍 Finding missing movies from Top Picks source...')
-      const missingMovies = await getMissingMovies(config.moviesAutoRequestLimit)
-      addLog(jobId, 'info', `📋 Found ${missingMovies.length} missing movies`)
-      
-      // Step 3: Request missing movies
+      addLog(jobId, 'info', '🔍 Planning movie requests from the Top Picks source...')
+      const plan = options.plans?.movie ?? (await planAutoRequests('movie', config))
+      logPlan(jobId, 'Movies', plan)
       setJobStep(jobId, 2, 'Requesting movies')
-      
-      for (const movie of missingMovies) {
-        try {
-          // Check if already requested
-          const status = await getMediaStatus(movie.tmdbId, 'movie')
-          if (status?.requested) {
-            addLog(jobId, 'info', `⏭️ "${movie.title}" already requested`)
-            result.moviesSkipped++
-            continue
-          }
-          
-          // Create request
-          const requestResult = await createRequest(movie.tmdbId, 'movie', buildAutoRequestOptions('movie', requestSettings))
-          if (requestResult.success) {
-            addLog(jobId, 'info', `✅ Requested "${movie.title}" (${movie.year})`)
-            result.moviesRequested++
-          } else {
-            addLog(jobId, 'warn', `⚠️ Failed to request "${movie.title}": ${requestResult.message}`)
-            result.moviesSkipped++
-          }
-          
-          // Small delay between requests
-          await new Promise(resolve => setTimeout(resolve, 500))
-        } catch (err) {
-          const error = err instanceof Error ? err.message : 'Unknown error'
-          addLog(jobId, 'error', `❌ Error requesting "${movie.title}": ${error}`)
-          result.errors.push(`Movie "${movie.title}": ${error}`)
-        }
-      }
+      const tally = { requested: 0, skipped: 0 }
+      await executePlan(jobId, plan, requestSettings, tally, result.errors)
+      result.moviesRequested = tally.requested
+      result.moviesSkipped = tally.skipped
     }
 
-    // Step 4: Get missing series
+    // Steps 4-5: series
     setJobStep(jobId, 3, 'Finding missing series')
-    
     if (config.seriesAutoRequestEnabled) {
-      addLog(jobId, 'info', '🔍 Finding missing series from Top Picks source...')
-      const missingSeries = await getMissingSeries(config.seriesAutoRequestLimit)
-      addLog(jobId, 'info', `📋 Found ${missingSeries.length} missing series`)
-      
-      // Step 5: Request missing series
+      addLog(jobId, 'info', '🔍 Planning series requests from the Top Picks source...')
+      const plan = options.plans?.tv ?? (await planAutoRequests('tv', config))
+      logPlan(jobId, 'Series', plan)
       setJobStep(jobId, 4, 'Requesting series')
-      
-      for (const series of missingSeries) {
-        try {
-          const status = await getMediaStatus(series.tmdbId, 'tv')
-          if (status?.requested) {
-            addLog(jobId, 'info', `⏭️ "${series.title}" already requested`)
-            result.seriesSkipped++
-            continue
-          }
-          
-          const requestResult = await createRequest(series.tmdbId, 'tv', buildAutoRequestOptions('tv', requestSettings))
-          if (requestResult.success) {
-            addLog(jobId, 'info', `✅ Requested "${series.title}" (${series.year})`)
-            result.seriesRequested++
-          } else {
-            addLog(jobId, 'warn', `⚠️ Failed to request "${series.title}": ${requestResult.message}`)
-            result.seriesSkipped++
-          }
-          
-          await new Promise(resolve => setTimeout(resolve, 500))
-        } catch (err) {
-          const error = err instanceof Error ? err.message : 'Unknown error'
-          addLog(jobId, 'error', `❌ Error requesting "${series.title}": ${error}`)
-          result.errors.push(`Series "${series.title}": ${error}`)
-        }
-      }
+      const tally = { requested: 0, skipped: 0 }
+      await executePlan(jobId, plan, requestSettings, tally, result.errors)
+      result.seriesRequested = tally.requested
+      result.seriesSkipped = tally.skipped
     }
 
     // Complete

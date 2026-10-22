@@ -21,7 +21,7 @@ export interface UseJobsDataReturn {
   cancellingJobs: Set<string>
   logsContainerRefs: React.MutableRefObject<Map<string, HTMLDivElement>>
   runningCount: number
-  handleRunJob: (jobName: string) => Promise<void>
+  handleRunJob: (jobName: string, body?: Record<string, unknown>) => Promise<void>
   handleCancelJob: (jobName: string) => Promise<void>
   handleUpdateConfig: (jobName: string, config: UpdateJobConfigParams) => Promise<void>
   toggleLogs: (jobName: string) => void
@@ -149,11 +149,12 @@ export function useJobsData(): UseJobsDataReturn {
     }
   }, [fetchJobs, connectToJobStream])
 
-  const handleRunJob = async (jobName: string) => {
+  const handleRunJob = async (jobName: string, body?: Record<string, unknown>) => {
     try {
       const response = await fetch(`/api/jobs/${jobName}/run`, {
         method: 'POST',
         credentials: 'include',
+        ...(body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
       })
 
       if (response.ok) {

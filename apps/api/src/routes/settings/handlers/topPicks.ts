@@ -14,7 +14,7 @@ import {
   topPicksConfigSchema,
   updateTopPicksConfigSchema,
 } from '../schemas.js'
-import type { PopularitySource, HybridExternalSource } from '@aperture/core'
+import type { PopularitySource, HybridExternalSource, AutoRequestRules } from '@aperture/core'
 
 export function registerTopPicksHandlers(fastify: FastifyInstance) {
   /**
@@ -94,6 +94,8 @@ export function registerTopPicksHandlers(fastify: FastifyInstance) {
       autoRequestCron?: string
       autoRequestSeerrUserId?: number | null
       seriesAutoRequestSeasons?: 'all' | 'first'
+      moviesAutoRequestRules?: AutoRequestRules
+      seriesAutoRequestRules?: AutoRequestRules
     }
   }>('/api/settings/top-picks', { preHandler: requireAdmin, schema: updateTopPicksConfigSchema }, async (request, reply) => {
     try {
@@ -101,7 +103,7 @@ export function registerTopPicksHandlers(fastify: FastifyInstance) {
       const config = await updateTopPicksConfig(request.body)
       return reply.send(config)
     } catch (err) {
-      if (err instanceof Error && /^(autoRequestSeerrUserId|seriesAutoRequestSeasons) must be/.test(err.message)) {
+      if (err instanceof Error && /^(autoRequestSeerrUserId|seriesAutoRequestSeasons) must be|^autoRequestRules invalid/.test(err.message)) {
         return reply.status(400).send({ error: err.message })
       }
       fastify.log.error({ err }, 'Failed to update Top Picks config')
