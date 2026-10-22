@@ -3,9 +3,9 @@ name: Sync dev with main
 # After merging a PR to main, sync dev branch to match main exactly
 # This keeps both branches with identical commit histories
 
+# FORK: automatic trigger disabled (upstream: push to main). Manual only.
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   sync:

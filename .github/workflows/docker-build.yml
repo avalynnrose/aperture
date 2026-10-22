@@ -1,10 +1,10 @@
 name: Build and Push Docker Image
 
+# FORK: automatic publishing is disabled. Images are only built when this workflow is
+# started manually, and only after the fork owner has approved publishing.
+# (Upstream triggers: push to main/dev and v* tags.)
 on:
-  push:
-    branches: [main, dev]
-    tags: ['v*']
-  workflow_dispatch: # Allow manual trigger
+  workflow_dispatch: # Manual trigger only
 
 env:
   REGISTRY: ghcr.io
