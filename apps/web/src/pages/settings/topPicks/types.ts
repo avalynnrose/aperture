@@ -70,6 +70,10 @@ export interface TopPicksConfig {
   seriesAutoRequestEnabled: boolean
   seriesAutoRequestLimit: number
   autoRequestCron: string
+  // Top Picks Requester: Seerr user ID credited with automatic requests (null = Seerr default)
+  autoRequestSeerrUserId: number | null
+  // Seasons requested by automatic TV requests
+  seriesAutoRequestSeasons: 'all' | 'first'
   // Language filters
   moviesLanguages: string[]
   moviesIncludeUnknownLanguage: boolean

@@ -217,6 +217,12 @@ export const updateSeerrConfigSchema = {
   },
 }
 
+export const listSeerrUsersSchema = {
+  tags: ['seerr'],
+  summary: 'List Seerr users',
+  description: 'List Seerr user accounts (admin only) as { id, name } for pickers such as the Top Picks Requester setting. Emails and tokens are not returned.',
+}
+
 export const testSeerrSchema = {
   tags: ['seerr'],
   summary: 'Test Seerr connection',

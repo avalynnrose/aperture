@@ -92,6 +92,8 @@ export function registerTopPicksHandlers(fastify: FastifyInstance) {
       seriesAutoRequestEnabled?: boolean
       seriesAutoRequestLimit?: number
       autoRequestCron?: string
+      autoRequestSeerrUserId?: number | null
+      seriesAutoRequestSeasons?: 'all' | 'first'
     }
   }>('/api/settings/top-picks', { preHandler: requireAdmin, schema: updateTopPicksConfigSchema }, async (request, reply) => {
     try {
@@ -99,6 +101,9 @@ export function registerTopPicksHandlers(fastify: FastifyInstance) {
       const config = await updateTopPicksConfig(request.body)
       return reply.send(config)
     } catch (err) {
+      if (err instanceof Error && /^(autoRequestSeerrUserId|seriesAutoRequestSeasons) must be/.test(err.message)) {
+        return reply.status(400).send({ error: err.message })
+      }
       fastify.log.error({ err }, 'Failed to update Top Picks config')
       return reply.status(500).send({ error: 'Failed to update Top Picks configuration' })
     }

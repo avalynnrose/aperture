@@ -1,0 +1,70 @@
+name: CI checks (fork)
+
+# Read-only verification for pull requests: unit tests, typecheck, lint, build, and a
+# migration replay against a throwaway Postgres service container.
+# No registry login, no packages permission, no secrets, no deployment.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: ci-throwaway
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      HUSKY: '0'
+      PGPASSWORD: ci-throwaway
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.0.0 --activate
+          pnpm install --frozen-lockfile
+
+      - name: Unit tests (Top Picks auto-request helpers)
+        run: pnpm --filter "./packages/*" run build && pnpm --filter @aperture/core run test:topPicks
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build all workspaces
+        run: pnpm -r build
+
+      - name: Replay all migrations on a throwaway database
+        run: |
+          for f in $(ls db/migrations/*.sql | sort); do
+            psql -q -h localhost -U postgres -d ci -v ON_ERROR_STOP=1 -f "$f" > /dev/null
+          done
+          psql -h localhost -U postgres -d ci -Atc "select auto_request_seerr_user_id is null, series_auto_request_seasons from top_picks_config" | tee defaults.txt
+          test "$(cat defaults.txt)" = "t|all"

@@ -19,6 +19,7 @@ import {
   getSystemSetting,
   resolveSeerrUserIdForProfile,
   listRadarrServers,
+  listAllSeerrUsers,
   getRadarrServerDetails,
   listSonarrServers,
   getSonarrServerDetails,
@@ -36,6 +37,7 @@ import {
   batchStatusSchema,
   getRequestStatusSchema,
   listRadarrServiceSchema,
+  listSeerrUsersSchema,
   getRadarrServiceSchema,
   listSonarrServiceSchema,
   getSonarrServiceSchema,
@@ -172,6 +174,40 @@ const seerrRoutes: FastifyPluginAsync = async (fastify) => {
         message: 'Seerr configuration updated',
         configured: !!(url && apiKey),
         enabled: enabled ?? false,
+      })
+    }
+  )
+
+  /**
+   * GET /api/seerr/users
+   * List Seerr users as { id, name } (admin only). Used by the Top Picks Requester dropdown.
+   * Returns 502 when Seerr cannot be reached or returns no users, so the UI can say so
+   * instead of showing an empty list as if there were no accounts.
+   */
+  fastify.get(
+    '/api/seerr/users',
+    { preHandler: requireAdmin, schema: listSeerrUsersSchema },
+    async (_request, reply) => {
+      if (!(await isSeerrConfigured())) {
+        return reply.status(400).send({ error: 'Seerr is not configured' })
+      }
+      const users = await listAllSeerrUsers()
+      if (users.length === 0) {
+        return reply.status(502).send({ error: 'Seerr returned no users or could not be reached' })
+      }
+      return reply.send({
+        users: users
+          .map((u) => ({
+            id: u.id,
+            name:
+              u.displayName?.trim() ||
+              u.username?.trim() ||
+              u.jellyfinUsername?.trim() ||
+              u.plexUsername?.trim() ||
+              u.email?.trim() ||
+              `User ${u.id}`,
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
       })
     }
   )

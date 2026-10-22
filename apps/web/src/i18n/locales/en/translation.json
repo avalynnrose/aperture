@@ -3542,7 +3542,21 @@
       "enableSeries": "Enable auto-request for series",
       "requiresExternal": "Auto-request requires an external source (TMDB or MDBList)",
       "moviesHelper": "Limit how many movies to request per job run",
-      "seriesHelper": "Limit how many series to request per job run"
+      "seriesHelper": "Limit how many series to request per job run",
+      "requesterLabel": "Top Picks Requester",
+      "requesterHelper": "Choose which user account is credited with automatic Top Picks requests.",
+      "requesterHelperAll": "Applies to automatic movie and TV requests. Manual requests are not affected.",
+      "requesterDefault": "Default (Seerr API key account)",
+      "requesterLoading": "Loading Seerr users...",
+      "requesterNotConfigured": "Configure Seerr in Settings → Integrations to choose a requester.",
+      "requesterLoadError": "Could not load Seerr users. The saved requester is kept; automatic requests will stop if it cannot be verified.",
+      "requesterUnavailable": "Unavailable user (ID {{id}})",
+      "requesterUnavailableWarning": "The saved requester (Seerr user ID {{id}}) no longer exists in Seerr. Automatic requests will fail until you choose another account or Default. Nothing is switched automatically.",
+      "requesterUnverified": "User ID {{id}} (not verified)",
+      "seasonsLabel": "TV seasons to request",
+      "seasonsAll": "All seasons (default)",
+      "seasonsFirst": "Season 1 only",
+      "seasonsHelper": "Which seasons automatic TV requests ask for. Independent of the requester setting."
     },
     "actions": {
       "resetDefaults": "Reset to Defaults",

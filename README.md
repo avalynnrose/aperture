@@ -4,6 +4,16 @@
 [![Docker Image](https://img.shields.io/badge/docker-ghcr.io%2Fdgruhin--hrizn%2Faperture-blue?logo=docker)](https://github.com/dgruhin-hrizn/aperture/pkgs/container/aperture)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
+> ## Personal Fork
+>
+> This is a personal fork of Aperture maintained primarily for my own homelab.
+>
+> It includes experimental enhancements to automatic Seerr requests, including configurable content filters and selection strategies.
+>
+> This fork is not officially affiliated with or supported by the original Aperture project. Updates and support are provided on a best-effort basis.
+>
+> Upstream project: [dgruhin-hrizn/aperture](https://github.com/dgruhin-hrizn/aperture) (AGPL-3.0; see [LICENSE](LICENSE)). Fork changes are listed in [Fork Changes](#fork-changes).
+
 **Aperture** — AI-powered media recommendations for Emby & Jellyfin.
 
 Aperture creates personalized recommendation libraries for your media server users using OpenAI embeddings and pgvector similarity search. Recommendations appear as virtual libraries in your media server's home screen, with support for both **movies** and **TV series**.
@@ -130,6 +140,38 @@ docker-compose -f docker-compose.[your-platform].yml up -d
 - **Configurable Schedules** — All job schedules adjustable via Admin → Jobs
 - **User Management** — Per-user recommendation settings
 - **Cost Estimator** — Built-in OpenAI API cost estimation
+
+---
+
+## Fork Changes
+
+Changes in this fork relative to upstream `v0.7.10`. Everything below defaults to upstream behavior, so an unmodified install behaves exactly as upstream until you change a setting.
+
+### Top Picks Requester (Settings → Top Picks → Auto-Request)
+
+Choose which Seerr user account is credited with automatic Top Picks requests, for movies and TV alike.
+
+- **Where:** a dropdown labelled **Top Picks Requester**, listing Seerr users by name (not numeric ID). Aperture stores the selected user's Seerr ID.
+- **Default:** *Default (Seerr API key account)*. No user is sent with the request, which is the upstream behavior.
+- **Scope:** automatic Top Picks requests only. Manual and Discover requests are unchanged.
+- **Deleted or unavailable users:** the saved selection is never switched silently. If the selected user no longer exists, the dropdown shows *Unavailable user (ID n)* with a warning, and the auto-request job stops with an error in its log until you choose another account or Default. If Seerr cannot be reached or returns no users, the job also stops rather than guessing.
+- **Requirements:** Seerr must be configured, and its API key must belong to an admin (Seerr only honors a requesting user ID from an admin key).
+- **Admin API:** `GET /api/seerr/users` (admin only) returns `{ users: [{ id, name }] }`; emails and tokens are not included.
+
+### TV season selection (Settings → Top Picks → Auto-Request → Series)
+
+Choose which seasons automatic TV requests ask for. This is independent of the requester setting.
+
+- **All seasons (default):** upstream behavior.
+- **Season 1 only:** requests only the first season of each show.
+
+### Healthcheck
+
+The container healthcheck uses `http://127.0.0.1:3456/health` instead of `localhost`, which can resolve to IPv6 on hosts where the server listens on IPv4 only.
+
+### Database
+
+Migration `0115_top_picks_requester_and_seasons.sql` adds two columns to `top_picks_config` (`auto_request_seerr_user_id`, `series_auto_request_seasons`). It is additive, so earlier images continue to run against the migrated database.
 
 ---
 

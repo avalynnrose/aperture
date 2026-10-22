@@ -12,6 +12,8 @@ export interface SeerrUser {
   id: number
   email: string
   username: string
+  displayName?: string | null
+  plexUsername?: string | null
   plexToken: string | null
   jellyfinUsername: string | null
   jellyfinUserId: string | null
