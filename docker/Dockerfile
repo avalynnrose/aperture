@@ -131,9 +131,9 @@ ENV DOCKER_ENV=true
 # Expose port
 EXPOSE 3456
 
-# Health check
+# Health check (127.0.0.1, not localhost: localhost can resolve to IPv6 while the server listens on IPv4)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget -qO- http://localhost:3456/health || exit 1
+    CMD wget -qO- http://127.0.0.1:3456/health || exit 1
 
 # Start the server
 CMD ["node", "apps/api/dist/index.js"]
