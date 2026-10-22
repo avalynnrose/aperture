@@ -15,33 +15,7 @@ import { useTranslation } from 'react-i18next'
 import { buildCountryOptions, type CountryOption } from './countries'
 import type { AutoRequestRules } from './types'
 
-interface GenreOption {
-  id: number
-  name: string
-}
-
-/** TMDB genre list for one media type (movie and TV genre ids differ for some genres). */
-export function useTmdbGenres(mediaType: 'movie' | 'tv'): { genres: GenreOption[]; error: boolean } {
-  const [genres, setGenres] = useState<GenreOption[]>([])
-  const [error, setError] = useState(false)
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const r = await fetch(`/api/settings/top-picks/auto-request/genres?mediaType=${mediaType}`, { credentials: 'include' })
-        if (!r.ok) throw new Error(String(r.status))
-        const data = (await r.json()) as { genres: GenreOption[] }
-        if (!cancelled) setGenres(data.genres)
-      } catch {
-        if (!cancelled) setError(true)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [mediaType])
-  return { genres, error }
-}
+import { useTmdbGenres, type GenreOption } from './hooks/useTmdbGenres'
 
 /** Debounced TMDB keyword search. TMDB keywords are not the same thing as Emby tags. */
 function useKeywordSearch(text: string): { options: GenreOption[]; error: boolean; loading: boolean } {

@@ -21,7 +21,7 @@ import {
   Typography,
 } from '@mui/material'
 import { useTranslation } from 'react-i18next'
-import { useTmdbGenres } from './AutoRequestRulesPanel'
+import { useTmdbGenres } from './hooks/useTmdbGenres'
 import { countryName } from './countries'
 import type { AutoRequestDecision, AutoRequestPlanEntry, AutoRequestPlanView, AutoRequestPreviewResponse } from './types'
 
