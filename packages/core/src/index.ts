@@ -444,6 +444,7 @@ export {
   getTopSeriesPreview,
   runAutoRequestJob,
   type TopPicksConfig,
+  type AutoRequestRules,
   type PopularMovie,
   type PopularSeries,
   type RefreshTopPicksResult,

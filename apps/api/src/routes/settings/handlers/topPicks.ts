@@ -14,7 +14,7 @@ import {
   topPicksConfigSchema,
   updateTopPicksConfigSchema,
 } from '../schemas.js'
-import type { PopularitySource, HybridExternalSource } from '@aperture/core'
+import type { PopularitySource, HybridExternalSource, AutoRequestRules } from '@aperture/core'
 
 export function registerTopPicksHandlers(fastify: FastifyInstance) {
   /**
@@ -94,8 +94,8 @@ export function registerTopPicksHandlers(fastify: FastifyInstance) {
       autoRequestCron?: string
       autoRequestSeerrUserId?: number | null
       seriesAutoRequestSeasons?: 'all' | 'first'
-      moviesAutoRequestRules?: unknown
-      seriesAutoRequestRules?: unknown
+      moviesAutoRequestRules?: AutoRequestRules
+      seriesAutoRequestRules?: AutoRequestRules
     }
   }>('/api/settings/top-picks', { preHandler: requireAdmin, schema: updateTopPicksConfigSchema }, async (request, reply) => {
     try {
