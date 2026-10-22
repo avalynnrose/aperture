@@ -33,6 +33,9 @@ const LEGACY_SOURCE_MAP: Record<string, PopularitySource> = {
   'local': 'emby_history',
 }
 
+/** Seasons requested by automatic TV requests */
+export type SeriesAutoRequestSeasons = 'all' | 'first'
+
 export interface TopPicksConfig {
   isEnabled: boolean
   // Movies-specific settings
@@ -90,6 +93,10 @@ export interface TopPicksConfig {
   seriesAutoRequestEnabled: boolean
   seriesAutoRequestLimit: number
   autoRequestCron: string
+  /** Seerr user ID credited with automatic requests (movies and TV); null = Seerr default (API key owner) */
+  autoRequestSeerrUserId: number | null
+  /** Seasons requested by automatic TV requests: 'all' (default) or 'first' */
+  seriesAutoRequestSeasons: SeriesAutoRequestSeasons
   // Language filters (ISO 639-1 codes, empty = all languages)
   moviesLanguages: string[]
   moviesIncludeUnknownLanguage: boolean
@@ -154,6 +161,8 @@ interface TopPicksConfigRow {
   series_auto_request_enabled: boolean | null
   series_auto_request_limit: number | null
   auto_request_cron: string | null
+  auto_request_seerr_user_id: number | null
+  series_auto_request_seasons: string | null
   // Language filters
   movies_languages: string[] | null
   movies_include_unknown_language: boolean | null
@@ -271,6 +280,8 @@ export async function getTopPicksConfig(): Promise<TopPicksConfig> {
       seriesAutoRequestEnabled: false,
       seriesAutoRequestLimit: 10,
       autoRequestCron: '0 0 * * 0',
+      autoRequestSeerrUserId: null,
+      seriesAutoRequestSeasons: 'all',
       moviesLanguages: [],
       moviesIncludeUnknownLanguage: true,
       seriesLanguages: [],
@@ -468,6 +479,21 @@ export async function updateTopPicksConfig(
     setClauses.push(`auto_request_cron = $${paramIndex++}`)
     values.push(updates.autoRequestCron)
   }
+  if (updates.autoRequestSeerrUserId !== undefined) {
+    const id = updates.autoRequestSeerrUserId
+    if (id !== null && (!Number.isInteger(id) || id <= 0)) {
+      throw new Error('autoRequestSeerrUserId must be a positive integer or null')
+    }
+    setClauses.push(`auto_request_seerr_user_id = $${paramIndex++}`)
+    values.push(id)
+  }
+  if (updates.seriesAutoRequestSeasons !== undefined) {
+    if (updates.seriesAutoRequestSeasons !== 'all' && updates.seriesAutoRequestSeasons !== 'first') {
+      throw new Error("seriesAutoRequestSeasons must be 'all' or 'first'")
+    }
+    setClauses.push(`series_auto_request_seasons = $${paramIndex++}`)
+    values.push(updates.seriesAutoRequestSeasons)
+  }
   // Language filters
   if (updates.moviesLanguages !== undefined) {
     setClauses.push(`movies_languages = $${paramIndex++}`)
@@ -573,6 +599,8 @@ export async function resetTopPicksConfig(): Promise<TopPicksConfig> {
       series_auto_request_enabled = false,
       series_auto_request_limit = 10,
       auto_request_cron = '0 0 * * 0',
+      auto_request_seerr_user_id = NULL,
+      series_auto_request_seasons = 'all',
       movies_languages = '{}',
       movies_include_unknown_language = true,
       series_languages = '{}',
@@ -637,6 +665,8 @@ function mapRowToConfig(row: TopPicksConfigRow): TopPicksConfig {
     seriesAutoRequestEnabled: row.series_auto_request_enabled ?? false,
     seriesAutoRequestLimit: row.series_auto_request_limit ?? 10,
     autoRequestCron: row.auto_request_cron || '0 0 * * 0',
+    autoRequestSeerrUserId: row.auto_request_seerr_user_id ?? null,
+    seriesAutoRequestSeasons: row.series_auto_request_seasons === 'first' ? 'first' : 'all',
     moviesLanguages: row.movies_languages || [],
     moviesIncludeUnknownLanguage: row.movies_include_unknown_language ?? true,
     seriesLanguages: row.series_languages || [],

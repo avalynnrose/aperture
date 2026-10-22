@@ -17,9 +17,11 @@ import { getTopPicksConfig } from './config.js'
 import { 
   isSeerrConfigured, 
   createRequest, 
+  listAllSeerrUsers,
   getMediaStatus,
 } from '../seerr/index.js'
 import { query } from '../lib/db.js'
+import { buildAutoRequestOptions, resolveRequester } from './autoRequestOptions.js'
 import type { TMDbMovieResult, TMDbTVResult } from '../tmdb/index.js'
 
 const logger = createChildLogger('top-picks-auto-request')
@@ -282,7 +284,32 @@ export async function runAutoRequestJob(
       return result
     }
     
+    // Resolve the configured requester (Top Picks Requester setting) before requesting anything.
+    // A deleted or unverifiable user stops the job; we never fall back to another account.
+    const requester = resolveRequester(
+      config.autoRequestSeerrUserId,
+      config.autoRequestSeerrUserId === null ? [] : await listAllSeerrUsers()
+    )
+    if (requester.status === 'missing' || requester.status === 'unverified') {
+      const reason =
+        requester.status === 'missing'
+          ? `The configured Top Picks Requester (Seerr user ID ${requester.userId}) no longer exists in Seerr. Choose another requester in Top Picks settings.`
+          : `Could not verify the configured Top Picks Requester (Seerr user ID ${requester.userId}) because Seerr returned no users. No requests were made.`
+      addLog(jobId, 'error', `❌ ${reason}`)
+      result.errors.push(reason)
+      failJob(jobId, reason)
+      return result
+    }
+    const requestSettings = {
+      requesterUserId: requester.status === 'ok' ? requester.userId : null,
+      seriesSeasons: config.seriesAutoRequestSeasons,
+    }
+
     addLog(jobId, 'info', '✅ Configuration loaded')
+    addLog(jobId, 'info', requester.status === 'ok'
+      ? `👤 Requests credited to Seerr user ID ${requester.userId}`
+      : '👤 No Top Picks Requester set - Seerr default account is used')
+    addLog(jobId, 'info', `📺 TV seasons requested: ${config.seriesAutoRequestSeasons === 'first' ? 'season 1 only' : 'all seasons'}`)
     addLog(jobId, 'info', `🎬 Movies auto-request: ${config.moviesAutoRequestEnabled ? `enabled (limit: ${config.moviesAutoRequestLimit})` : 'disabled'}`)
     addLog(jobId, 'info', `📺 Series auto-request: ${config.seriesAutoRequestEnabled ? `enabled (limit: ${config.seriesAutoRequestLimit})` : 'disabled'}`)
 
@@ -308,7 +335,7 @@ export async function runAutoRequestJob(
           }
           
           // Create request
-          const requestResult = await createRequest(movie.tmdbId, 'movie')
+          const requestResult = await createRequest(movie.tmdbId, 'movie', buildAutoRequestOptions('movie', requestSettings))
           if (requestResult.success) {
             addLog(jobId, 'info', `✅ Requested "${movie.title}" (${movie.year})`)
             result.moviesRequested++
@@ -347,7 +374,7 @@ export async function runAutoRequestJob(
             continue
           }
           
-          const requestResult = await createRequest(series.tmdbId, 'tv')
+          const requestResult = await createRequest(series.tmdbId, 'tv', buildAutoRequestOptions('tv', requestSettings))
           if (requestResult.success) {
             addLog(jobId, 'info', `✅ Requested "${series.title}" (${series.year})`)
             result.seriesRequested++
