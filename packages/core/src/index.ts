@@ -444,6 +444,7 @@ export {
   getTopSeriesPreview,
   runAutoRequestJob,
   planAutoRequests,
+  searchTmdbKeywords,
   computePlanId,
   parseAutoRequestRules,
   readStoredAutoRequestRules,

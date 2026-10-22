@@ -94,11 +94,12 @@ function startMockSeerr(): Promise<void> {
 }
 
 // ---- helpers (core is imported lazily so a skipped run never needs a database) -----------------
-type Core = typeof import('./index.js')
+type Core = typeof import('../index.js')
 let core: Core
+let clearMetadataCache: () => void
 let pool: { query: (sql: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> }
 const ids = (plan: { result: { selected: { tmdbId: number }[] } }) => plan.result.selected.map((e) => e.tmdbId)
-const postedIds = () => seerr.posts.map((p) => p.mediaId as number)
+const postedIds = (type: 'movie' | 'tv' = 'movie') => seerr.posts.filter((p) => p.mediaType === type).map((p) => p.mediaId as number)
 
 async function configure(movieRules: unknown, extra: Record<string, unknown> = {}) {
   await core.updateTopPicksConfig({
@@ -124,7 +125,8 @@ before(async () => {
   if (!enabled) return
   installFakeTmdb()
   await startMockSeerr()
-  core = await import('./index.js')
+  core = await import('../index.js')
+  clearMetadataCache = (await import('./autoRequestMetadata.js')).clearTitleMetadataCache
   const { query } = await import('../lib/db.js')
   pool = { query: (sql, params) => query(sql, params) as never }
   await core.setSeerrConfig({ url: seerr.url, apiKey: 'mock', enabled: true })
@@ -142,6 +144,7 @@ after(async () => {
   setTimeout(() => process.exit(0), 200).unref()
 })
 beforeEach(() => {
+  if (enabled) clearMetadataCache()
   seerr.posts.length = 0
   seerr.requested.clear()
   seerr.requested.add(502)

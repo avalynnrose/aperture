@@ -94,6 +94,11 @@ export class TitleMetadataCache {
     return this.entries.size
   }
 
+  clear(): void {
+    this.entries.clear()
+    this.inflight.clear()
+  }
+
   async get(key: string, load: () => Promise<TitleMetadata>): Promise<TitleMetadata> {
     const hit = this.entries.get(key)
     if (hit && this.now() - hit.at < this.ttlMs) return hit.value
@@ -118,6 +123,11 @@ export class TitleMetadataCache {
 
 const sharedCache = new TitleMetadataCache()
 
+/** Drop all cached lookups (tests, or after changing the TMDB key). */
+export function clearTitleMetadataCache(): void {
+  sharedCache.clear()
+}
+
 export async function fetchTitleMetadata(
   mediaType: AutoRequestMediaType,
   tmdbId: number,
@@ -141,4 +151,19 @@ export function createMetadataGetter(
 ): SelectionDeps['getMetadata'] {
   const cache = options.cache ?? sharedCache
   return (c) => cache.get(`${mediaType}:${c.tmdbId}`, () => fetchTitleMetadata(mediaType, c.tmdbId, options.lookup))
+}
+
+export type KeywordSearchResult =
+  | { ok: true; results: KeywordRef[] }
+  | { ok: false; reason: 'error'; message: string }
+
+/** Search TMDB keywords by text for the keyword picker. TMDB keywords are not Emby tags. */
+export async function searchTmdbKeywords(query: string, lookup: RawLookup = tmdbLookup): Promise<KeywordSearchResult> {
+  const q = query.trim()
+  if (q.length < 2) return { ok: true, results: [] }
+  const r = await lookup(`/search/keyword?query=${encodeURIComponent(q)}&page=1`)
+  if (r.outcome === 'error') return { ok: false, reason: 'error', message: r.message }
+  if (r.outcome === 'not-found') return { ok: true, results: [] }
+  const raw = (r.data as { results?: { id: number; name: string }[] }).results ?? []
+  return { ok: true, results: raw.slice(0, 20).map((k) => ({ id: k.id, name: k.name })) }
 }

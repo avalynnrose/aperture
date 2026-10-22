@@ -362,6 +362,10 @@
         "cancelBody": "Are you sure you want to stop {{name}}? The job will be cancelled and any progress will be lost.",
         "keepRunning": "Keep Running",
         "stopJob": "Stop Job",
+        "autoRequestRunTitle": "Run auto-request now?",
+        "autoRequestRunBody": "This creates real requests in Seerr right away. To see exactly what would be requested first, use Preview Auto-Requests in Settings → Top Picks. The weekly schedule is not affected.",
+        "autoRequestRunCancel": "Cancel",
+        "autoRequestRunConfirm": "Run now",
         "notConfigured": "Not configured",
         "manualOnlyShort": "Manual only",
         "manualOnlyCaption": "Manual only (cannot schedule)",
@@ -3556,7 +3560,131 @@
       "seasonsLabel": "TV seasons to request",
       "seasonsAll": "All seasons (default)",
       "seasonsFirst": "Season 1 only",
-      "seasonsHelper": "Which seasons automatic TV requests ask for. Independent of the requester setting."
+      "seasonsHelper": "Which seasons automatic TV requests ask for. Independent of the requester setting.",
+      "rules": {
+        "strategyLabel": "Selection strategy",
+        "strategy": {
+          "legacy": "Missing-first (default, unchanged behavior)",
+          "strict": "Strict Top N",
+          "fill": "Fill to N"
+        },
+        "strategyHelp": {
+          "legacy": "Takes the first N titles that are missing from your library. Titles already requested in Seerr use up a slot and are not replaced. This is how auto-request has always worked.",
+          "strict": "Only the first N titles of the ranking are considered. Anything already owned, requested or filtered out is NOT replaced, so fewer than N (even zero) may be requested.",
+          "fill": "Keeps walking down the ranking until N eligible, missing, not-yet-requested titles are found or the depth limit is reached."
+        },
+        "targetLabel": "Target count (N)",
+        "targetHelp": "Leave empty to use the maximum requests per run ({{limit}}). The per-run maximum always applies as a separate safety cap.",
+        "depthLabel": "Look at most this many ranked titles",
+        "depthHelp": "Limits how far down the ranking Fill to N and Missing-first may look (10-500). The external lists come in pages of 20.",
+        "rankBasisLabel": "Rank titles by",
+        "rankBasis": {
+          "external": "External list order (default)",
+          "blended": "Hybrid blend (same score as Top Picks)"
+        },
+        "rankBasisHelp": {
+          "external": "Rank = position in the TMDB/MDBList list, as auto-request has always done.",
+          "blended": "Rank uses the Top Picks hybrid score. Titles not in your library have no watch history, so their local score is 0 and they are ordered by their position in the external list; watched titles in your library usually rank above them."
+        },
+        "filtersNote": "These filters apply only to automatic requests. They never change the Top Picks shown to users, Discover results, or manual requests.",
+        "countriesTitle": "Country of origin",
+        "countryExclude": "Exclude selected",
+        "countryInclude": "Only include selected",
+        "countryMatchLabel": "A title matches when",
+        "countryMatch": {
+          "any": "any origin country is selected",
+          "all": "all origin countries are selected"
+        },
+        "countriesLabel": "Countries",
+        "countriesHelp": "Uses the production/origin countries TMDB lists for the title, not its original language.",
+        "genresLabel": "Exclude genres (TMDB)",
+        "genresHelp": "A title is skipped if it has any of these genres. Movie and TV genres are separate lists.",
+        "genresError": "Could not load TMDB genres. Check the TMDB API key in Settings.",
+        "genreFallback": "Genre {{id}}",
+        "keywordsLabel": "Exclude TMDB keywords",
+        "keywordsHelp": "Type at least 2 letters to search. These are TMDB keywords (for example \"anime\"), not your media server's tags.",
+        "keywordsType": "Type to search TMDB keywords",
+        "keywordsNone": "No keywords found",
+        "keywordsError": "Keyword search failed. Check the TMDB API key and try again.",
+        "missingLabel": "If a title's metadata is empty",
+        "missing": {
+          "skip": "Do not request it (default)",
+          "allow": "Treat it as not matching"
+        },
+        "missingHelp": {
+          "skip": "Titles whose country or genre information is empty are shown as uncertain and are not requested.",
+          "allow": "Titles whose country or genre information is empty are treated as not matching a filter."
+        },
+        "failureNote": "If TMDB cannot be reached for a title, that title is never requested, whatever this setting says."
+      },
+      "preview": {
+        "button": "Preview Auto-Requests",
+        "buttonHelp": "Read-only: shows what the next run would request with the saved settings. Nothing is requested.",
+        "title": "Auto-request preview",
+        "readOnlyNote": "This preview only reads. It makes no Seerr requests and changes no data.",
+        "unsaved": "You have unsaved changes. The preview uses the saved settings; save first to preview your edits.",
+        "planChanged": "The plan changed since the preview, so nothing was requested. Review the updated plan and confirm again.",
+        "stale": "This preview is more than 10 minutes old. Refresh it before running.",
+        "started": "Auto-request started. Follow its progress on Admin → Jobs.",
+        "loadError": "Could not build the preview",
+        "movies": "Movies",
+        "series": "Series",
+        "strategyChip": "Strategy: {{strategy}}",
+        "targetChip": "Target {{n}} · max {{cap}} per run",
+        "rankChip": "Ranked by: {{basis}}",
+        "enabled": "Auto-request on",
+        "disabled": "Auto-request off (preview only)",
+        "summary": "Evaluated {{evaluated}} titles: {{selected}} would be requested, {{skipped}} skipped (owned/requested), {{excluded}} excluded by filters, {{uncertain}} uncertain, {{overCap}} over the per-run cap.",
+        "exhausted": "The ranking ran out before reaching the target.",
+        "depthCapped": "The depth limit was reached before the target.",
+        "empty": "No ranked titles to show.",
+        "col": {
+          "rank": "Rank",
+          "title": "Title",
+          "status": "Status",
+          "countries": "Origin countries",
+          "genres": "Genres",
+          "keywords": "Keyword matches",
+          "decision": "Decision",
+          "reasons": "Reasons"
+        },
+        "none": "none",
+        "status": {
+          "library": "In library",
+          "requested": "Already requested",
+          "missing": "Missing",
+          "unknown": "Unknown"
+        },
+        "decision": {
+          "selected": "Will request",
+          "skipped": "Skipped",
+          "excluded": "Excluded",
+          "uncertain": "Uncertain",
+          "over-cap": "Over cap"
+        },
+        "reasons": {
+          "duplicate": "Duplicate of a higher-ranked title",
+          "in-library": "Already in your library",
+          "already-requested": "Already requested in Seerr",
+          "requested-unknown": "Could not check Seerr",
+          "country-excluded": "Excluded country",
+          "country-not-included": "Origin not in the allowed countries",
+          "genre-excluded": "Excluded genre",
+          "keyword-excluded": "Excluded keyword",
+          "metadata-unavailable": "TMDB lookup failed (never requested)",
+          "metadata-missing": "TMDB has no data for",
+          "cap-reached": "Per-run cap reached"
+        },
+        "generated": "Generated at {{time}}",
+        "refresh": "Refresh preview",
+        "close": "Close",
+        "runNow": "Request these now…",
+        "confirmTitle": "Create these requests in Seerr?",
+        "confirmBody": "This sends {{count}} real request(s) to Seerr now ({{movies}} movie(s), {{series}} series), credited to the Top Picks Requester. Requests cannot be undone from Aperture. If the plan changed since this preview, nothing is sent.",
+        "cancel": "Cancel",
+        "confirmRun": "Request now",
+        "starting": "Starting…"
+      }
     },
     "actions": {
       "resetDefaults": "Reset to Defaults",
