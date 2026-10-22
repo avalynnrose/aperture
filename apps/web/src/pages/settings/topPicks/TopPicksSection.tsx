@@ -111,7 +111,7 @@ export function TopPicksSection() {
 
       {showLocalAlgorithm && <TopPicksLocalAlgorithmCard config={config} updateConfig={updateConfig} />}
 
-      <TopPicksAutoRequestCard config={config} updateConfig={updateConfig} />
+      <TopPicksAutoRequestCard config={config} updateConfig={updateConfig} hasChanges={hasChanges} />
 
       <TopPicksOutputConfigCard
         config={config}
