@@ -57,3 +57,18 @@ export function buildAutoRequestOptions(
   }
   return options
 }
+
+/** Validate a requester setting value (null = default). Throws a message the API maps to HTTP 400. */
+export function assertValidRequesterId(id: unknown): asserts id is number | null {
+  if (id === null) return
+  if (typeof id !== 'number' || !Number.isInteger(id) || id <= 0) {
+    throw new Error('autoRequestSeerrUserId must be a positive integer or null')
+  }
+}
+
+/** Validate a TV season mode setting value. */
+export function assertValidSeasonMode(mode: unknown): asserts mode is SeriesAutoRequestSeasons {
+  if (mode !== 'all' && mode !== 'first') {
+    throw new Error("seriesAutoRequestSeasons must be 'all' or 'first'")
+  }
+}

@@ -20,6 +20,7 @@ import {
   resolveSeerrUserIdForProfile,
   listRadarrServers,
   listAllSeerrUsers,
+  seerrUserLabel,
   getRadarrServerDetails,
   listSonarrServers,
   getSonarrServerDetails,
@@ -197,16 +198,7 @@ const seerrRoutes: FastifyPluginAsync = async (fastify) => {
       }
       return reply.send({
         users: users
-          .map((u) => ({
-            id: u.id,
-            name:
-              u.displayName?.trim() ||
-              u.username?.trim() ||
-              u.jellyfinUsername?.trim() ||
-              u.plexUsername?.trim() ||
-              u.email?.trim() ||
-              `User ${u.id}`,
-          }))
+          .map((u) => ({ id: u.id, name: seerrUserLabel(u) }))
           .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
       })
     }
