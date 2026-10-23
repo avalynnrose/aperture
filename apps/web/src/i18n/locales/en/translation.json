@@ -3564,19 +3564,23 @@
       "rules": {
         "strategyLabel": "Selection strategy",
         "strategy": {
-          "legacy": "Missing-first (default, unchanged behavior)",
+          "chart": "Top N Eligible (default)",
+          "legacy": "Missing-first (original Aperture behavior)",
           "strict": "Strict Top N",
           "fill": "Fill to N"
         },
         "strategyHelp": {
+          "chart": "Builds a chart of the first N ranked titles that pass your filters. Titles you already own or have already requested hold their place in the chart without a new request; only eligible missing titles are requested. Excluded and unreleased titles take no place, so the search continues down the ranking until N eligible titles are found or the depth limit is reached.",
           "legacy": "Takes the first N titles that are missing from your library. Titles already requested in Seerr use up a slot and are not replaced. This is how auto-request has always worked.",
           "strict": "Only the first N titles of the ranking are considered. Anything already owned, requested or filtered out is NOT replaced, so fewer than N (even zero) may be requested.",
           "fill": "Keeps walking down the ranking until N eligible, missing, not-yet-requested titles are found or the depth limit is reached."
         },
+        "skipUnreleasedLabel": "Skip titles that have not been released yet",
+        "skipUnreleasedHelp": "A movie counts as released once its TMDB release date has passed (or is today); a show once its first episode has aired. Unreleased titles are excluded and, in Top N Eligible, take no place in the chart. Titles with no date follow the setting for empty metadata below.",
         "targetLabel": "Target count (N)",
         "targetHelp": "Leave empty to use the maximum requests per run ({{limit}}). The per-run maximum always applies as a separate safety cap.",
         "depthLabel": "Look at most this many ranked titles",
-        "depthHelp": "Limits how far down the ranking Fill to N and Missing-first may look (10-500). The external lists come in pages of 20.",
+        "depthHelp": "Limits how far down the ranking Top N Eligible, Fill to N and Missing-first may look (10-500). The external lists come in pages of 20.",
         "rankBasisLabel": "Rank titles by",
         "rankBasis": {
           "external": "External list order (default)",
@@ -3638,7 +3642,19 @@
         "exhausted": "The ranking ran out before reaching the target.",
         "depthCapped": "The depth limit was reached before the target.",
         "empty": "No ranked titles to show.",
+        "chartSummary": "Top {{target}} eligible: {{size}} found after looking at {{evaluated}} ranked titles. {{inLibrary}} in your library, {{requestedAlready}} already requested, {{willRequest}} will be requested, {{overCap}} over the per-run cap.",
+        "chartShort": "Fewer than {{target}} eligible titles were found.",
+        "chartTitle": "Top {{target}} chart",
+        "notInChartTitle": "Not in the chart (excluded, unreleased or unverified)",
+        "notInChartEmpty": "Nothing was excluded.",
+        "availability": {
+          "in-library": "In library",
+          "requested": "Already requested",
+          "will-request": "Will request",
+          "over-cap": "Over per-run cap"
+        },
         "col": {
+          "place": "Place",
           "rank": "Rank",
           "title": "Title",
           "status": "Status",
@@ -3671,6 +3687,7 @@
           "country-not-included": "Origin not in the allowed countries",
           "genre-excluded": "Excluded genre",
           "keyword-excluded": "Excluded keyword",
+          "not-released": "Not released yet",
           "metadata-unavailable": "TMDB lookup failed (never requested)",
           "metadata-missing": "TMDB has no data for",
           "cap-reached": "Per-run cap reached"

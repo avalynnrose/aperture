@@ -22,6 +22,8 @@ interface FakeTitle {
   countries: string[]
   keywords: { id: number; name: string }[]
   failDetails?: boolean
+  /** release / first air date served by the fake; defaults to a past date */
+  release?: string
 }
 const movies: FakeTitle[] = [
   { id: 501, title: 'Owned One', lang: 'en', genres: [18], countries: ['US'], keywords: [] },
@@ -52,8 +54,8 @@ function installFakeTmdb() {
       const src = list[1] === 'movie' ? movies : shows
       const results = (page === 1 ? src : []).map((t) =>
         list[1] === 'movie'
-          ? { id: t.id, title: t.title, release_date: '2024-01-01', original_language: t.lang, genre_ids: t.genres, popularity: 1, vote_average: 7, vote_count: 10 }
-          : { id: t.id, name: t.title, first_air_date: '2024-01-01', original_language: t.lang, genre_ids: t.genres, origin_country: t.countries, popularity: 1, vote_average: 7, vote_count: 10 }
+          ? { id: t.id, title: t.title, release_date: t.release ?? '2024-01-01', original_language: t.lang, genre_ids: t.genres, popularity: 1, vote_average: 7, vote_count: 10 }
+          : { id: t.id, name: t.title, first_air_date: t.release ?? '2024-01-01', original_language: t.lang, genre_ids: t.genres, origin_country: t.countries, popularity: 1, vote_average: 7, vote_count: 10 }
       )
       return json({ page, results, total_pages: 1, total_results: results.length })
     }
@@ -63,8 +65,8 @@ function installFakeTmdb() {
       if (!t) return json({ status_message: 'not found' }, 404)
       if (t.failDetails) return json({ status_message: 'boom' }, 500)
       return detail[1] === 'movie'
-        ? json({ id: t.id, genres: t.genres.map((id) => ({ id })), production_countries: t.countries.map((c) => ({ iso_3166_1: c })), keywords: { keywords: t.keywords } })
-        : json({ id: t.id, genres: t.genres.map((id) => ({ id })), origin_country: t.countries, keywords: { results: t.keywords } })
+        ? json({ id: t.id, release_date: t.release ?? '2024-01-01', genres: t.genres.map((id) => ({ id })), production_countries: t.countries.map((c) => ({ iso_3166_1: c })), keywords: { keywords: t.keywords } })
+        : json({ id: t.id, first_air_date: t.release ?? '2024-01-01', genres: t.genres.map((id) => ({ id })), origin_country: t.countries, keywords: { results: t.keywords } })
     }
     return json({}, 404)
   }) as typeof fetch
@@ -149,11 +151,14 @@ beforeEach(() => {
   seerr.requested.clear()
   seerr.requested.add(502)
   seerr.users = [{ id: 1 }, { id: 2 }]
-  for (const t of movies) t.failDetails = false
+  for (const t of movies) {
+    t.failDetails = false
+    t.release = undefined
+  }
 })
 
-test('default (legacy) rules reproduce the old behavior: first N missing titles, requested ones use a slot', opts, async () => {
-  await configure({})
+test('legacy strategy reproduces the old behavior: first N missing titles, requested ones use a slot', opts, async () => {
+  await configure({ strategy: 'legacy' })
   const cfg = await core.getTopPicksConfig()
   const plan = await core.planAutoRequests('movie', cfg)
   assert.deepEqual(ids(plan), [503, 504]) // 501 owned (free), 502 requested (slot), 503, 504 -> 3 slots
@@ -251,4 +256,34 @@ test('a requester that no longer exists stops the job before any request is made
   const result = await core.runAutoRequestJob()
   assert.equal(seerr.posts.length, 0)
   assert.ok(result.errors[0].includes('no longer exists'))
+})
+
+test('Top N Eligible: owned and requested titles hold places, excluded and unreleased take none, only missing eligible titles are requested', opts, async () => {
+  movies.find((m) => m.id === 504)!.release = '2099-01-01'
+  await configure({ strategy: 'chart', targetCount: 5, skipUnreleased: true, ...FILTERS })
+  const plan = await core.planAutoRequests('movie', await core.getTopPicksConfig())
+  const chart = plan.result.entries.filter((e) => e.chartPosition !== undefined)
+  assert.deepEqual(chart.map((e) => e.rank), [1, 2, 5, 7, 8])
+  assert.deepEqual(chart.map((e) => e.availability), ['in-library', 'requested', 'will-request', 'will-request', 'will-request'])
+  assert.deepEqual(ids(plan), [505, 507, 508])
+  const future = plan.result.entries.find((e) => e.tmdbId === 504)!
+  assert.equal(future.decision, 'excluded')
+  assert.ok(future.reasons.some((r) => r.code === 'not-released'))
+  assert.equal(plan.result.entries.find((e) => e.tmdbId === 503)!.decision, 'excluded')
+  assert.equal(plan.result.summary.chart!.size, 5)
+  await core.runAutoRequestJob(undefined, { plans: { movie: plan } })
+  assert.deepEqual(postedIds(), [505, 507, 508])
+})
+
+test('Top N Eligible: preview is read-only and the chart is the same on every run of the same inputs', opts, async () => {
+  await configure({ strategy: 'chart', targetCount: 5, ...FILTERS })
+  const cfg = await core.getTopPicksConfig()
+  const before = await writeCounters()
+  const a = await core.planAutoRequests('movie', cfg)
+  const b = await core.planAutoRequests('movie', cfg)
+  const after = await writeCounters()
+  assert.equal(seerr.posts.length, 0)
+  assert.equal(after, before)
+  assert.equal(a.planId, b.planId)
+  assert.deepEqual(a.result.entries, b.result.entries)
 })

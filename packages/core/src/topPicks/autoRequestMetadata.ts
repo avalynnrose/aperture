@@ -16,11 +16,13 @@ import type { AutoRequestMediaType } from './autoRequestCandidates.js'
 import type { SelectionDeps, TitleMetadata } from './autoRequestSelection.js'
 
 interface RawMovie {
+  release_date?: string | null
   genres?: { id: number }[]
   production_countries?: { iso_3166_1: string }[]
   keywords?: { keywords?: { id: number; name: string }[] }
 }
 interface RawTv {
+  first_air_date?: string | null
   genres?: { id: number }[]
   origin_country?: string[]
   production_countries?: { iso_3166_1: string }[]
@@ -34,6 +36,7 @@ export function parseMovieMetadata(raw: RawMovie): Extract<TitleMetadata, { stat
     genreIds: raw.genres?.map((g) => g.id),
     countries: raw.production_countries?.map((c) => c.iso_3166_1.toUpperCase()),
     keywords: raw.keywords?.keywords?.map((k): KeywordRef => ({ id: k.id, name: k.name })),
+    releaseDate: raw.release_date || null,
   }
 }
 
@@ -50,6 +53,7 @@ export function parseTvMetadata(raw: RawTv): Extract<TitleMetadata, { status: 'o
     genreIds: raw.genres?.map((g) => g.id),
     countries,
     keywords: raw.keywords?.results?.map((k): KeywordRef => ({ id: k.id, name: k.name })),
+    releaseDate: raw.first_air_date || null,
   }
 }
 

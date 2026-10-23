@@ -147,7 +147,7 @@ docker-compose -f docker-compose.[your-platform].yml up -d
 
 ## Fork Changes
 
-Changes in this fork relative to upstream `v0.7.10`. Everything below defaults to upstream behavior, so an unmodified install behaves exactly as upstream until you change a setting.
+Changes in this fork relative to upstream `v0.7.10`. Apart from the default selection strategy for automatic requests (see below), everything defaults to upstream behavior.
 
 ### Top Picks Requester (Settings → Top Picks → Auto-Request)
 
@@ -164,11 +164,11 @@ Choose which Seerr user account is credited with automatic Top Picks requests, f
 
 Choose *which* missing titles are requested automatically. Details: [docs/admin/auto-request-rules.md](docs/admin/auto-request-rules.md).
 
-- **Strategies:** *Missing-first* (default, unchanged behavior), **Strict Top N**, **Fill to N**; separate settings and target count for movies and TV, plus the existing per-run maximum as an independent safety cap.
+- **Strategies:** **Top N Eligible** (default: a chart of the first *N* ranked titles that pass your filters; owned and already-requested titles hold their place without a new request, excluded and unreleased titles take none), *Missing-first* (the upstream behavior), **Strict Top N**, **Fill to N**; separate settings and target count for movies and TV, plus the existing per-run maximum as an independent safety cap.
 - **Ranking:** external list order (default) or the hybrid blend the Top Picks display uses (hybrid sources only).
-- **Filters:** country of origin (include or exclude), TMDB genres, TMDB keywords, alongside the existing language filter. Failed or empty metadata is never silently treated as a match.
+- **Filters:** country of origin (include or exclude), TMDB genres, TMDB keywords, an optional *skip unreleased titles* switch, alongside the existing language filter. Failed or empty metadata is never silently treated as a match.
 - **Preview:** a read-only table of the ranked candidates with original rank, status, filter matches and reasons, built by the same code as the real run. Manual runs ask for confirmation.
-- **Defaults:** every rule is off or set to upstream behavior until you change it.
+- **Defaults:** the filters and the unreleased switch are off until you turn them on; the default strategy is Top N Eligible, and *Missing-first* restores upstream behavior.
 
 ### TV season selection (Settings → Top Picks → Auto-Request → Series)
 

@@ -5,7 +5,9 @@ import {
   Box,
   Chip,
   Divider,
+  FormControlLabel,
   MenuItem,
+  Switch,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -92,6 +94,7 @@ export function AutoRequestRulesPanel({ mediaType, rules, onChange, perRunLimit,
         disabled={disabled}
         helperText={t(`${prefix}.strategyHelp.${rules.strategy}`)}
       >
+        <MenuItem value="chart">{t(`${prefix}.strategy.chart`)}</MenuItem>
         <MenuItem value="legacy">{t(`${prefix}.strategy.legacy`)}</MenuItem>
         <MenuItem value="strict">{t(`${prefix}.strategy.strict`)}</MenuItem>
         <MenuItem value="fill">{t(`${prefix}.strategy.fill`)}</MenuItem>
@@ -139,6 +142,20 @@ export function AutoRequestRulesPanel({ mediaType, rules, onChange, perRunLimit,
           <MenuItem value="blended">{t(`${prefix}.rankBasis.blended`)}</MenuItem>
         </TextField>
       )}
+
+      <FormControlLabel
+        control={
+          <Switch
+            checked={rules.skipUnreleased}
+            onChange={(e) => set({ skipUnreleased: e.target.checked })}
+            disabled={disabled}
+          />
+        }
+        label={t(`${prefix}.skipUnreleasedLabel`)}
+      />
+      <Typography variant="caption" color="text.secondary" sx={{ mt: -1.5 }}>
+        {t(`${prefix}.skipUnreleasedHelp`)}
+      </Typography>
 
       <Divider />
       <Typography variant="caption" color="text.secondary">

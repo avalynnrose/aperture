@@ -30,6 +30,8 @@ export interface ExternalListItem {
   genreIds?: number[]
   /** TV origin countries from TMDB list results */
   countries?: string[]
+  /** movie release date / TV first air date (YYYY-MM-DD) from TMDB list results; null = list has none */
+  releaseDate?: string | null
 }
 
 /** A title that the Top Picks display scores (it is in the library and in the local or external list). */
@@ -65,6 +67,7 @@ export function rankByExternalOrder(
     inLibrary: libraryTmdbIds.has(item.tmdbId),
     genreIds: item.genreIds,
     countries: item.countries,
+    releaseDate: item.releaseDate,
     originalLanguage: item.originalLanguage,
   }))
 }
@@ -99,6 +102,7 @@ export function rankByHybridBlend(args: {
         inLibrary: true,
         genreIds: ext?.genreIds,
         countries: ext?.countries,
+        releaseDate: ext?.releaseDate,
         originalLanguage: ext?.originalLanguage ?? null,
         scores: { local: d.localScore, external: d.externalScore, blended },
       },
@@ -121,6 +125,7 @@ export function rankByHybridBlend(args: {
         inLibrary: libraryTmdbIds.has(it.tmdbId),
         genreIds: it.genreIds,
         countries: it.countries,
+        releaseDate: it.releaseDate,
         originalLanguage: it.originalLanguage,
         scores: { local: 0, external, blended },
       },

@@ -16,7 +16,7 @@ export type HybridExternalSource =
   | 'mdblist'
 
 export interface AutoRequestRules {
-  strategy: 'legacy' | 'strict' | 'fill'
+  strategy: 'legacy' | 'strict' | 'fill' | 'chart'
   targetCount: number | null
   maxCandidates: number
   rankBasis: 'external' | 'blended'
@@ -24,6 +24,7 @@ export interface AutoRequestRules {
   excludedGenreIds: number[]
   excludedKeywords: { id: number; name: string }[]
   missingMetadata: 'skip' | 'allow'
+  skipUnreleased: boolean
 }
 
 export interface TopPicksConfig {
@@ -181,6 +182,19 @@ export interface AutoRequestPlanEntry {
   genreIds: number[] | null
   matchedKeywords: { id: number; name: string }[]
   scores?: { local: number; external: number; blended: number }
+  chartPosition?: number
+  availability?: AutoRequestAvailability
+}
+
+export type AutoRequestAvailability = 'in-library' | 'requested' | 'will-request' | 'over-cap'
+
+export interface AutoRequestChartSummary {
+  size: number
+  inLibrary: number
+  alreadyRequested: number
+  willRequest: number
+  overCap: number
+  short: boolean
 }
 
 export interface AutoRequestPlanSummary {
@@ -197,6 +211,7 @@ export interface AutoRequestPlanSummary {
   excluded: number
   uncertain: number
   overCap: number
+  chart?: AutoRequestChartSummary
 }
 
 export interface AutoRequestPlanView {

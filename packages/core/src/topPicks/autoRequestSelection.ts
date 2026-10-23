@@ -22,12 +22,14 @@ export interface RankedCandidate {
   /** origin country codes known from list data (TV); undefined = need a details lookup */
   countries?: string[]
   originalLanguage?: string | null
+  /** YYYY-MM-DD release date (movie) or first air date (TV) known from list data; undefined = need a details lookup */
+  releaseDate?: string | null
   /** hybrid score components when the blended ranking is used (for display) */
   scores?: { local: number; external: number; blended: number }
 }
 
 export type TitleMetadata =
-  | { status: 'ok'; genreIds?: number[]; countries?: string[]; keywords?: KeywordRef[] }
+  | { status: 'ok'; genreIds?: number[]; countries?: string[]; keywords?: KeywordRef[]; releaseDate?: string | null }
   | { status: 'not-found' }
   | { status: 'error'; message: string }
 
@@ -54,6 +56,7 @@ export interface Reason {
     | 'country-not-included'
     | 'genre-excluded'
     | 'keyword-excluded'
+    | 'not-released'
     | 'metadata-unavailable'
     | 'metadata-missing'
     | 'cap-reached'
@@ -73,6 +76,22 @@ export interface PlanEntry {
   genreIds: number[] | null
   matchedKeywords: KeywordRef[]
   scores?: RankedCandidate['scores']
+  /** chart strategy: 1-based place in the final chart; undefined for titles that take no slot */
+  chartPosition?: number
+  /** chart strategy: what the title needs; undefined outside the chart */
+  availability?: ChartAvailability
+}
+
+export type ChartAvailability = 'in-library' | 'requested' | 'will-request' | 'over-cap'
+
+export interface ChartSummary {
+  size: number
+  inLibrary: number
+  alreadyRequested: number
+  willRequest: number
+  overCap: number
+  /** fewer than N eligible titles were found */
+  short: boolean
 }
 
 export interface SelectionSummary {
@@ -92,6 +111,7 @@ export interface SelectionSummary {
   excluded: number
   uncertain: number
   overCap: number
+  chart?: ChartSummary
 }
 
 export interface SelectionResult {
@@ -112,9 +132,10 @@ function rulesActiveForKeywords(rules: AutoRequestRules) {
 
 /** Evaluate the content filters for one candidate once its metadata is known. Pure. */
 export function evaluateFilters(
-  candidate: Pick<RankedCandidate, 'genreIds' | 'countries'>,
+  candidate: Pick<RankedCandidate, 'genreIds' | 'countries' | 'releaseDate'>,
   metadata: TitleMetadata | null,
-  rules: AutoRequestRules
+  rules: AutoRequestRules,
+  today: string = todayUtc()
 ): {
   excluded: Reason[]
   uncertain: Reason[]
@@ -170,6 +191,19 @@ export function evaluateFilters(
     }
   }
 
+  // Release date: a title is released once its date is today or earlier (UTC date, YYYY-MM-DD).
+  if (rules.skipUnreleased) {
+    const date = normalizeDate(candidate.releaseDate !== undefined ? candidate.releaseDate : okMeta?.releaseDate)
+    if (date === undefined) {
+      if (failed) unavailable('release date')
+      else missing('release date')
+    } else if (date === null) {
+      missing('release date')
+    } else if (date > today) {
+      excluded.push({ code: 'not-released', detail: date })
+    }
+  }
+
   // Keywords (TMDB keywords; an empty list is a valid answer, a failed lookup is not)
   if (rulesActiveForKeywords(rules)) {
     const kws = okMeta?.keywords
@@ -190,8 +224,21 @@ export function evaluateFilters(
   return { excluded, uncertain, countries, genreIds, matchedKeywords }
 }
 
+export function todayUtc(now: Date = new Date()): string {
+  return now.toISOString().slice(0, 10)
+}
+
+/** undefined = not known (needs a lookup); null = known to be missing/unusable; else YYYY-MM-DD. */
+function normalizeDate(raw: string | null | undefined): string | null | undefined {
+  if (raw === undefined) return undefined
+  if (raw === null) return null
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(raw.trim())
+  return m ? m[1] : null
+}
+
 function needsMetadata(c: RankedCandidate, rules: AutoRequestRules): boolean {
   return (
+    (rules.skipUnreleased && c.releaseDate === undefined) ||
     (rulesActiveForGenres(rules) && c.genreIds === undefined) ||
     (rulesActiveForCountries(rules) && c.countries === undefined) ||
     rulesActiveForKeywords(rules)
@@ -201,9 +248,11 @@ function needsMetadata(c: RankedCandidate, rules: AutoRequestRules): boolean {
 export async function selectAutoRequests(
   ranked: readonly RankedCandidate[],
   rules: AutoRequestRules,
-  limits: { perRunCap: number },
+  limits: { perRunCap: number; now?: Date },
   deps: SelectionDeps
 ): Promise<SelectionResult> {
+  if (rules.strategy === 'chart') return selectTopNEligible(ranked, rules, limits, deps)
+  const today = todayUtc(limits.now)
   const perRunCap = Math.max(0, Math.floor(limits.perRunCap))
   const target = effectiveTargetCount(rules, perRunCap)
   const windowSize =
@@ -272,7 +321,7 @@ export async function selectAutoRequests(
     }
 
     const metadata = needsMetadata(c, rules) ? await deps.getMetadata(c) : null
-    const f = evaluateFilters(c, metadata, rules)
+    const f = evaluateFilters(c, metadata, rules, today)
     const common = {
       requested: false as const,
       countries: f.countries,
@@ -320,6 +369,142 @@ export async function selectAutoRequests(
         rules.strategy !== 'strict' &&
         (rules.strategy === 'fill' ? eligible : slots) < stopAt &&
         evaluated >= rules.maxCandidates,
+    },
+  }
+}
+
+/**
+ * "Top N Eligible": build a chart of the first N ranked titles that pass every filter.
+ *
+ * Titles keep their source rank. A title that is already in the library, or already requested in
+ * Seerr, holds its chart place without producing a request; an eligible missing title is requested
+ * (subject to the per-run cap). Excluded and unreleased titles take no place. A title whose
+ * eligibility or request status cannot be verified takes no place either and is never requested.
+ * The walk stops at the Nth eligible title or at the depth cap, so requests are never generated
+ * just to reach N.
+ *
+ * Filters run before the library and request checks so that excluded titles cost no Seerr call and
+ * owned titles are held to the same rules as everything else.
+ */
+async function selectTopNEligible(
+  ranked: readonly RankedCandidate[],
+  rules: AutoRequestRules,
+  limits: { perRunCap: number; now?: Date },
+  deps: SelectionDeps
+): Promise<SelectionResult> {
+  const perRunCap = Math.max(0, Math.floor(limits.perRunCap))
+  const target = effectiveTargetCount(rules, perRunCap)
+  const today = todayUtc(limits.now)
+  const windowSize = Math.min(rules.maxCandidates, ranked.length)
+
+  const entries: PlanEntry[] = []
+  const seen = new Set<number>()
+  let chartSize = 0
+  let toRequest = 0
+  let evaluated = 0
+
+  for (let i = 0; i < windowSize && chartSize < target; i++) {
+    const c = ranked[i]
+    evaluated++
+    const base = {
+      rank: c.rank,
+      tmdbId: c.tmdbId,
+      title: c.title,
+      year: c.year,
+      inLibrary: c.inLibrary,
+      scores: c.scores,
+    }
+    const finish = (decision: Decision, reasons: Reason[], extra: Partial<PlanEntry> = {}) =>
+      entries.push({
+        ...base,
+        requested: null,
+        countries: c.countries ?? null,
+        genreIds: c.genreIds ?? null,
+        matchedKeywords: [],
+        decision,
+        reasons,
+        ...extra,
+      })
+
+    if (seen.has(c.tmdbId)) {
+      finish('skipped', [{ code: 'duplicate' }])
+      continue
+    }
+    seen.add(c.tmdbId)
+
+    const metadata = needsMetadata(c, rules) ? await deps.getMetadata(c) : null
+    const f = evaluateFilters(c, metadata, rules, today)
+    const common = {
+      countries: f.countries,
+      genreIds: f.genreIds,
+      matchedKeywords: f.matchedKeywords,
+    }
+    if (f.excluded.length > 0) {
+      finish('excluded', [...f.excluded, ...f.uncertain], common)
+      continue
+    }
+    if (f.uncertain.length > 0) {
+      finish('uncertain', f.uncertain, common)
+      continue
+    }
+
+    const place = () => {
+      chartSize++
+      return { ...common, chartPosition: chartSize }
+    }
+
+    if (c.inLibrary) {
+      finish('skipped', [{ code: 'in-library' }], { ...place(), availability: 'in-library' })
+      continue
+    }
+
+    const requested = await deps.isRequested(c)
+    if (requested === 'unknown') {
+      finish('uncertain', [{ code: 'requested-unknown' }], { ...common, requested: 'unknown' })
+      continue
+    }
+    if (requested === true) {
+      finish('skipped', [{ code: 'already-requested' }], { ...place(), requested: true, availability: 'requested' })
+      continue
+    }
+
+    toRequest++
+    if (toRequest <= perRunCap) {
+      finish('selected', [], { ...place(), requested: false, availability: 'will-request' })
+    } else {
+      finish('over-cap', [{ code: 'cap-reached' }], { ...place(), requested: false, availability: 'over-cap' })
+    }
+  }
+
+  const count = (d: Decision) => entries.filter((e) => e.decision === d).length
+  const countAvail = (a: ChartAvailability) => entries.filter((e) => e.availability === a).length
+  const selected = entries.filter((e) => e.decision === 'selected')
+  const short = chartSize < target
+  return {
+    entries,
+    selected,
+    summary: {
+      strategy: rules.strategy,
+      targetCount: target,
+      perRunCap,
+      windowSize,
+      evaluated,
+      notEvaluated: windowSize - evaluated,
+      selected: selected.length,
+      skipped: count('skipped'),
+      excluded: count('excluded'),
+      uncertain: count('uncertain'),
+      overCap: count('over-cap'),
+      exhausted: short && evaluated === ranked.length && ranked.length < rules.maxCandidates,
+      depthCapped: short && evaluated >= rules.maxCandidates,
+      chart: {
+        size: chartSize,
+        inLibrary: countAvail('in-library'),
+        alreadyRequested: countAvail('requested'),
+        willRequest: countAvail('will-request'),
+        overCap: countAvail('over-cap'),
+        short,
+      },
     },
   }
 }

@@ -2,12 +2,12 @@
  * Auto-request rules: per-media-type settings that decide which Top Picks titles are requested
  * automatically. These apply ONLY to automatic requests; they never change the displayed Top Picks.
  *
- * Stored as JSON on the top_picks_config row; an empty object means "all defaults", which
- * reproduces the behavior from before these rules existed (see DEFAULT_AUTO_REQUEST_RULES).
+ * Stored as JSON on the top_picks_config row; an empty object means "all defaults" (see
+ * DEFAULT_AUTO_REQUEST_RULES). The pre-rules behavior is still available as the `legacy` strategy.
  */
 import { z } from 'zod'
 
-export type SelectionStrategy = 'legacy' | 'strict' | 'fill'
+export type SelectionStrategy = 'legacy' | 'strict' | 'fill' | 'chart'
 export type RankBasis = 'external' | 'blended'
 export type CountryMode = 'exclude' | 'include'
 export type CountryMatch = 'any' | 'all'
@@ -26,11 +26,15 @@ export interface AutoRequestRules {
    *         are skipped WITHOUT being replaced.
    * strict: only the first N ranked titles are evaluated (requests may be fewer than N, even zero).
    * fill:   keep walking down the ranking until N eligible titles are found or the depth cap is hit.
+   * chart:  "Top N Eligible" (the default). Build a chart of the first N ranked titles that pass every
+   *         filter. Titles already in the library or already requested hold their place in the chart
+   *         without generating a request; only eligible missing titles are requested. Excluded and
+   *         unreleased titles take no slot. The search stops at the Nth eligible title or at the depth cap.
    */
   strategy: SelectionStrategy
   /** N. null = use the per-run request limit (the pre-existing setting). */
   targetCount: number | null
-  /** Fill only: how many ranked titles may be examined at most. */
+  /** Fill and chart: how many ranked titles may be examined at most. */
   maxCandidates: number
   /**
    * Hybrid sources only. external: rank by position in the external list (pre-existing behavior).
@@ -53,10 +57,15 @@ export interface AutoRequestRules {
    * A failed metadata lookup is NEVER allowed through, regardless of this setting.
    */
   missingMetadata: MissingMetadataPolicy
+  /**
+   * Skip titles that have not been released yet (movie release date, or a show's first air date, is
+   * in the future). Unreleased titles are excluded like any other filter and take no chart slot.
+   */
+  skipUnreleased: boolean
 }
 
 export const DEFAULT_AUTO_REQUEST_RULES: AutoRequestRules = {
-  strategy: 'legacy',
+  strategy: 'chart',
   targetCount: null,
   maxCandidates: 200,
   rankBasis: 'external',
@@ -64,6 +73,7 @@ export const DEFAULT_AUTO_REQUEST_RULES: AutoRequestRules = {
   excludedGenreIds: [],
   excludedKeywords: [],
   missingMetadata: 'skip',
+  skipUnreleased: false,
 }
 
 const uniqueSorted = <T extends number | string>(xs: T[]): T[] =>
@@ -73,7 +83,7 @@ const uniqueSorted = <T extends number | string>(xs: T[]): T[] =>
 
 export const AutoRequestRulesSchema = z
   .object({
-    strategy: z.enum(['legacy', 'strict', 'fill']).default('legacy'),
+    strategy: z.enum(['legacy', 'strict', 'fill', 'chart']).default('chart'),
     targetCount: z.number().int().min(1).max(100).nullable().default(null),
     maxCandidates: z.number().int().min(10).max(500).default(200),
     rankBasis: z.enum(['external', 'blended']).default('external'),
@@ -94,6 +104,7 @@ export const AutoRequestRulesSchema = z
       .max(200)
       .default([]),
     missingMetadata: z.enum(['skip', 'allow']).default('skip'),
+    skipUnreleased: z.boolean().default(false),
   })
   .strict()
 
@@ -137,6 +148,7 @@ export function rulesNeedMetadata(rules: AutoRequestRules): boolean {
   return (
     rules.countries.codes.length > 0 ||
     rules.excludedGenreIds.length > 0 ||
-    rules.excludedKeywords.length > 0
+    rules.excludedKeywords.length > 0 ||
+    rules.skipUnreleased
   )
 }

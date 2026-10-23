@@ -8,7 +8,7 @@ import {
   type TitleMetadata,
 } from './autoRequestSelection.js'
 
-const rules = (over: Partial<AutoRequestRules> = {}): AutoRequestRules => ({ ...DEFAULT_AUTO_REQUEST_RULES, ...over })
+const rules = (over: Partial<AutoRequestRules> = {}): AutoRequestRules => ({ ...DEFAULT_AUTO_REQUEST_RULES, strategy: 'legacy', ...over })
 const cand = (rank: number, over: Partial<RankedCandidate> = {}): RankedCandidate => ({
   tmdbId: 1000 + rank, title: `Title ${rank}`, year: 2020, rank, inLibrary: false, ...over,
 })
@@ -228,9 +228,11 @@ test('legacy: filters never use slots; excluded titles are skipped and the walk 
   assert.deepEqual(ids(r), [2, 3, 4])
 })
 
-test('rules default to legacy so existing installs keep their effective behavior', () => {
-  assert.equal(parseAutoRequestRules({}).strategy, 'legacy')
-  assert.equal(DEFAULT_AUTO_REQUEST_RULES.strategy, 'legacy')
+test('rules default to the Top N Eligible chart with release filtering off; legacy stays selectable', () => {
+  assert.equal(parseAutoRequestRules({}).strategy, 'chart')
+  assert.equal(DEFAULT_AUTO_REQUEST_RULES.strategy, 'chart')
+  assert.equal(DEFAULT_AUTO_REQUEST_RULES.skipUnreleased, false)
+  assert.equal(parseAutoRequestRules({ strategy: 'legacy' }).strategy, 'legacy')
 })
 
 test('rules parsing: defaults, normalization and rejection of bad input', () => {
@@ -244,4 +246,124 @@ test('rules parsing: defaults, normalization and rejection of bad input', () => 
   assert.throws(() => parseAutoRequestRules({ countries: { codes: ['JPN'] } }), /countries/)
   assert.throws(() => parseAutoRequestRules({ targetCount: 0 }), /targetCount/)
   assert.throws(() => parseAutoRequestRules({ unknownField: 1 }), /autoRequestRules invalid/)
+})
+
+// ---- Top N Eligible (chart) ----------------------------------------------------------------
+
+const chartRules = (over: Partial<AutoRequestRules> = {}) => rules({ strategy: 'chart', targetCount: 10, ...over })
+const NOW = new Date('2026-10-23T12:00:00Z')
+
+test('chart: owner example - owned and requested titles hold places, excluded/unreleased take none, search continues to the Nth eligible', async () => {
+  // ranks 1-10: 1,2,3 owned | 4,5 unreleased | 6,7 excluded (genre 16) | 8,9,10 eligible and missing
+  // ranks 11-14: eligible and missing (the 4 extra needed); 15+ must not be touched
+  const list = ranked(30, (r) => ({
+    inLibrary: r <= 3,
+    releaseDate: r === 4 || r === 5 ? '2027-01-01' : '2026-01-01',
+    genreIds: r === 6 || r === 7 ? [16] : [18],
+    countries: ['US'],
+  }))
+  const { d, calls } = deps()
+  const r = await selectAutoRequests(list, chartRules({ skipUnreleased: true, excludedGenreIds: [16] }), { perRunCap: 25, now: NOW }, d)
+  assert.deepEqual(ids(r), [8, 9, 10, 11, 12, 13, 14])
+  const chart = r.entries.filter((e) => e.chartPosition !== undefined)
+  assert.deepEqual(chart.map((e) => e.rank), [1, 2, 3, 8, 9, 10, 11, 12, 13, 14])
+  assert.deepEqual(chart.map((e) => e.chartPosition), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+  assert.deepEqual(r.summary.chart, { size: 10, inLibrary: 3, alreadyRequested: 0, willRequest: 7, overCap: 0, short: false })
+  assert.equal(r.summary.evaluated, 14)
+  assert.deepEqual(r.entries.filter((e) => e.decision === 'excluded').map((e) => e.rank), [4, 5, 6, 7])
+  assert.ok(r.entries.find((e) => e.rank === 4)!.reasons.some((x) => x.code === 'not-released'))
+  assert.equal(calls.requested, 7, 'Seerr is only asked about titles that passed the filters and are not owned')
+})
+
+test('chart: already requested titles hold a place without a duplicate request; source order is preserved', async () => {
+  const list = ranked(20, (r) => ({ inLibrary: r === 2 }))
+  const f: Fakes = { requested: new Set([1001, 1003]) }
+  const r = await selectAutoRequests(list, chartRules({ targetCount: 5 }), { perRunCap: 25 }, deps(f).d)
+  assert.deepEqual(ids(r), [4, 5])
+  assert.deepEqual(r.entries.map((e) => e.availability), ['requested', 'in-library', 'requested', 'will-request', 'will-request'])
+  assert.deepEqual(r.summary.chart, { size: 5, inLibrary: 1, alreadyRequested: 2, willRequest: 2, overCap: 0, short: false })
+  assert.equal(r.summary.evaluated, 5, 'stops at the 5th eligible title; nothing is requested just to reach more')
+})
+
+test('chart: filters apply to owned titles too, so an owned excluded title takes no place', async () => {
+  const list = ranked(10, (r) => ({ inLibrary: r === 1, genreIds: r === 1 ? [16] : [18], countries: ['US'] }))
+  const r = await selectAutoRequests(list, chartRules({ targetCount: 3, excludedGenreIds: [16] }), { perRunCap: 25 }, deps().d)
+  assert.equal(r.entries[0].decision, 'excluded')
+  assert.deepEqual(ids(r), [2, 3, 4])
+})
+
+test('chart: per-run cap limits requests but not chart places; over-cap titles are listed', async () => {
+  const r = await selectAutoRequests(ranked(30), chartRules({ targetCount: 10 }), { perRunCap: 4 }, deps().d)
+  assert.deepEqual(ids(r), [1, 2, 3, 4])
+  assert.equal(r.summary.chart!.size, 10)
+  assert.equal(r.summary.chart!.overCap, 6)
+  assert.equal(r.summary.overCap, 6)
+})
+
+test('chart: unverifiable titles (failed lookup, unknown Seerr status) take no place and are never requested', async () => {
+  const list = ranked(10, () => ({ genreIds: [18], countries: ['US'] }))
+  const f: Fakes = { unknownRequested: new Set([1002]), meta: new Map([[1001, { status: 'error', message: 'down' }]]) }
+  const r = await selectAutoRequests(list, chartRules({ targetCount: 3, excludedKeywords: [{ id: 5, name: 'x' }] }), { perRunCap: 25 }, deps(f).d)
+  assert.deepEqual(r.entries.filter((e) => e.decision === 'uncertain').map((e) => e.rank), [1, 2])
+  assert.deepEqual(ids(r), [3, 4, 5])
+})
+
+test('chart: stops at the depth cap and reports a short chart', async () => {
+  const list = ranked(40, (r) => ({ inLibrary: false, genreIds: r % 2 ? [16] : [18], countries: ['US'] }))
+  const r = await selectAutoRequests(list, chartRules({ targetCount: 10, maxCandidates: 12, excludedGenreIds: [16] }), { perRunCap: 25 }, deps().d)
+  assert.equal(r.summary.chart!.size, 6)
+  assert.equal(r.summary.chart!.short, true)
+  assert.equal(r.summary.depthCapped, true)
+  assert.equal(r.summary.evaluated, 12)
+})
+
+test('chart: targetCount null uses the per-run limit as the chart size', async () => {
+  const r = await selectAutoRequests(ranked(30), chartRules({ targetCount: null }), { perRunCap: 7 }, deps().d)
+  assert.equal(r.summary.targetCount, 7)
+  assert.equal(r.summary.chart!.size, 7)
+})
+
+// ---- skip unreleased -------------------------------------------------------------------------
+
+test('skipUnreleased: future dates are excluded with the date as the reason; today and past dates pass', async () => {
+  const dates = ['2026-10-24', '2026-10-23', '2020-05-05', '2026-12-31T00:00:00Z']
+  const list = ranked(4, (r) => ({ releaseDate: dates[r - 1] }))
+  for (const strategy of ['legacy', 'strict', 'fill', 'chart'] as const) {
+    const r = await selectAutoRequests(list, rules({ strategy, targetCount: 4, skipUnreleased: true }), { perRunCap: 25, now: NOW }, deps().d)
+    assert.deepEqual(ids(r), [2, 3], strategy)
+    const e = r.entries.filter((x) => x.decision === 'excluded')
+    assert.deepEqual(e.map((x) => x.reasons[0].detail), ['2026-10-24', '2026-12-31'], strategy)
+  }
+})
+
+test('skipUnreleased off: release dates are ignored and no lookup is made for them', async () => {
+  const { d, calls } = deps()
+  const r = await selectAutoRequests(ranked(3, () => ({ releaseDate: '2099-01-01' })), chartRules({ targetCount: 3 }), { perRunCap: 25, now: NOW }, d)
+  assert.deepEqual(ids(r), [1, 2, 3])
+  assert.equal(calls.metadata, 0)
+})
+
+test('skipUnreleased: date unknown from the list is looked up from TMDB details', async () => {
+  const f: Fakes = { meta: new Map<number, TitleMetadata>([[1001, { status: 'ok', releaseDate: '2027-02-02' }], [1002, { status: 'ok', releaseDate: '2025-02-02' }]]) }
+  const { d, calls } = deps(f)
+  const r = await selectAutoRequests(ranked(2), chartRules({ targetCount: 2, skipUnreleased: true }), { perRunCap: 25, now: NOW }, d)
+  assert.deepEqual(ids(r), [2])
+  assert.equal(calls.metadata, 2)
+})
+
+test('skipUnreleased: a missing date follows the missing-metadata policy; a failed lookup is never allowed through', async () => {
+  const list = ranked(3, (r) => ({ releaseDate: r === 3 ? undefined : null }))
+  const f: Fakes = { meta: new Map<number, TitleMetadata>([[1003, { status: 'error', message: 'x' }]]) }
+  const skip = await selectAutoRequests(list, chartRules({ targetCount: 3, skipUnreleased: true, missingMetadata: 'skip' }), { perRunCap: 25, now: NOW }, deps(f).d)
+  assert.equal(skip.selected.length, 0)
+  assert.deepEqual(skip.entries.map((e) => e.decision), ['uncertain', 'uncertain', 'uncertain'])
+  const allow = await selectAutoRequests(list, chartRules({ targetCount: 3, skipUnreleased: true, missingMetadata: 'allow' }), { perRunCap: 25, now: NOW }, deps(f).d)
+  assert.deepEqual(ids(allow), [1, 2])
+  assert.equal(allow.entries[2].decision, 'uncertain')
+})
+
+test('rules: skipUnreleased and the chart strategy parse; bad values are rejected', () => {
+  const p = parseAutoRequestRules({ strategy: 'chart', skipUnreleased: true })
+  assert.equal(p.skipUnreleased, true)
+  assert.throws(() => parseAutoRequestRules({ skipUnreleased: 'yes' }), /skipUnreleased/)
 })
