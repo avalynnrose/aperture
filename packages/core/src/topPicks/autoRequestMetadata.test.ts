@@ -16,14 +16,21 @@ test('movie response: genre ids, production countries and keywords (keywords.key
     production_countries: [{ iso_3166_1: 'jp' }, { iso_3166_1: 'US' }],
     keywords: { keywords: [{ id: 210024, name: 'anime' }] },
   })
-  assert.deepEqual(m, { status: 'ok', genreIds: [16, 35], countries: ['JP', 'US'], keywords: [{ id: 210024, name: 'anime' }] })
+  assert.deepEqual(m, { status: 'ok', genreIds: [16, 35], countries: ['JP', 'US'], keywords: [{ id: 210024, name: 'anime' }], releaseDate: null })
 })
 
 test('tv response: origin_country and keywords.results; falls back to production countries', () => {
   const t = parseTvMetadata({ genres: [{ id: 10764 }], origin_country: ['gb'], keywords: { results: [{ id: 5, name: 'x' }] } })
-  assert.deepEqual(t, { status: 'ok', genreIds: [10764], countries: ['GB'], keywords: [{ id: 5, name: 'x' }] })
+  assert.deepEqual(t, { status: 'ok', genreIds: [10764], countries: ['GB'], keywords: [{ id: 5, name: 'x' }], releaseDate: null })
   const fb = parseTvMetadata({ production_countries: [{ iso_3166_1: 'FR' }] })
   assert.deepEqual(fb.countries, ['FR'])
+})
+
+test('release date: movie release_date and TV first_air_date; empty or absent means null (known missing)', () => {
+  assert.equal(parseMovieMetadata({ release_date: '2026-11-05' }).releaseDate, '2026-11-05')
+  assert.equal(parseMovieMetadata({ release_date: '' }).releaseDate, null)
+  assert.equal(parseTvMetadata({ first_air_date: '2025-01-02' }).releaseDate, '2025-01-02')
+  assert.equal(parseTvMetadata({}).releaseDate, null)
 })
 
 test('absent sections stay undefined (missing), empty lists stay empty (valid)', () => {

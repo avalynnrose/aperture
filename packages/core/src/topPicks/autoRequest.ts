@@ -64,6 +64,9 @@ function logPlan(jobId: string, label: string, plan: AutoRequestPlan): void {
     'info',
     `📋 ${label} plan: strategy ${s.strategy}, target ${s.targetCount}, cap ${s.perRunCap}, rank basis ${plan.rankBasis}; ` +
       `evaluated ${s.evaluated}, selected ${s.selected}, skipped ${s.skipped}, excluded ${s.excluded}, uncertain ${s.uncertain}, over cap ${s.overCap}` +
+      (s.chart
+        ? `; chart ${s.chart.size}/${s.targetCount} (in library ${s.chart.inLibrary}, already requested ${s.chart.alreadyRequested}, to request ${s.chart.willRequest}, over cap ${s.chart.overCap})`
+        : '') +
       (s.exhausted ? ' (ranking exhausted before reaching the target)' : '') +
       (s.depthCapped ? ' (depth cap reached before reaching the target)' : '')
   )

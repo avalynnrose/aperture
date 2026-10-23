@@ -90,6 +90,7 @@ async function fetchExternalList(
       year: m.release_date ? parseInt(m.release_date.split('-')[0]) : null,
       originalLanguage: m.original_language || null,
       genreIds: m.genre_ids,
+      releaseDate: m.release_date || null,
     }))
   }
   const list =
@@ -104,6 +105,7 @@ async function fetchExternalList(
     year: t.first_air_date ? parseInt(t.first_air_date.split('-')[0]) : null,
     originalLanguage: t.original_language || null,
     genreIds: t.genre_ids,
+    releaseDate: t.first_air_date || null,
     countries: Array.isArray(t.origin_country) ? t.origin_country : undefined,
   }))
 }

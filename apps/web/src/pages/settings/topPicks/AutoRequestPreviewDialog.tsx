@@ -23,7 +23,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { useTmdbGenres } from './hooks/useTmdbGenres'
 import { countryName } from './countries'
-import type { AutoRequestDecision, AutoRequestPlanEntry, AutoRequestPlanView, AutoRequestPreviewResponse } from './types'
+import type { AutoRequestAvailability, AutoRequestDecision, AutoRequestPlanEntry, AutoRequestPlanView, AutoRequestPreviewResponse } from './types'
 
 const DECISION_COLOR: Record<AutoRequestDecision, 'success' | 'default' | 'error' | 'warning'> = {
   selected: 'success',
@@ -31,6 +31,13 @@ const DECISION_COLOR: Record<AutoRequestDecision, 'success' | 'default' | 'error
   excluded: 'error',
   uncertain: 'warning',
   'over-cap': 'default',
+}
+
+const AVAILABILITY_COLOR: Record<AutoRequestAvailability, 'success' | 'default' | 'info' | 'warning'> = {
+  'in-library': 'default',
+  requested: 'info',
+  'will-request': 'success',
+  'over-cap': 'warning',
 }
 
 interface Props {
@@ -146,6 +153,52 @@ export function AutoRequestPreviewDialog({ open, onClose, hasUnsavedChanges }: P
     }
   }
 
+  const renderTable = (entries: AutoRequestPlanEntry[], pl: AutoRequestPlanView, chart: boolean) => (
+    <Box sx={{ overflowX: 'auto' }}>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            {chart && <TableCell>{t(`${p}.col.place`)}</TableCell>}
+            <TableCell>{t(`${p}.col.rank`)}</TableCell>
+            <TableCell>{t(`${p}.col.title`)}</TableCell>
+            <TableCell>{t(`${p}.col.status`)}</TableCell>
+            <TableCell>{t(`${p}.col.countries`)}</TableCell>
+            <TableCell>{t(`${p}.col.genres`)}</TableCell>
+            <TableCell>{t(`${p}.col.keywords`)}</TableCell>
+            <TableCell>{t(`${p}.col.decision`)}</TableCell>
+            <TableCell>{t(`${p}.col.reasons`)}</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {entries.map((e) => (
+            <TableRow key={`${e.tmdbId}-${e.rank}`} sx={e.decision === 'selected' ? { backgroundColor: 'action.hover' } : undefined}>
+              {chart && <TableCell>{e.chartPosition}</TableCell>}
+              <TableCell>#{e.rank}</TableCell>
+              <TableCell>
+                {e.title}
+                {e.year ? ` (${e.year})` : ''}
+              </TableCell>
+              <TableCell>{statusText(e)}</TableCell>
+              <TableCell>{e.countries === null ? '—' : e.countries.length === 0 ? t(`${p}.none`) : e.countries.join(', ')}</TableCell>
+              <TableCell>
+                {e.genreIds === null ? '—' : e.genreIds.map((id) => genreNames[pl.mediaType].get(id) ?? String(id)).join(', ') || t(`${p}.none`)}
+              </TableCell>
+              <TableCell>{e.matchedKeywords.map((k) => k.name).join(', ') || '—'}</TableCell>
+              <TableCell>
+                {e.availability ? (
+                  <Chip size="small" variant={e.availability === 'will-request' ? 'filled' : 'outlined'} color={AVAILABILITY_COLOR[e.availability]} label={t(`${p}.availability.${e.availability}`)} />
+                ) : (
+                  <Chip size="small" variant="outlined" color={DECISION_COLOR[e.decision]} label={t(`${p}.decision.${e.decision}`)} />
+                )}
+              </TableCell>
+              <TableCell>{e.reasons.map((r) => reasonText(r.code, r.detail)).join('; ')}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Box>
+  )
+
   const s = plan?.result.summary
   return (
     <>
@@ -203,11 +256,29 @@ export function AutoRequestPreviewDialog({ open, onClose, hasUnsavedChanges }: P
                 <Chip size="small" label={t(`${p}.rankChip`, { basis: t(`topPicksAdmin.autoRequest.rules.rankBasis.${plan.rankBasis}`) })} />
                 <Chip size="small" color={plan.enabled ? 'success' : 'default'} label={plan.enabled ? t(`${p}.enabled`) : t(`${p}.disabled`)} />
               </Stack>
+              {s.chart && (
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  {t(`${p}.chartSummary`, {
+                    target: plan.targetCount,
+                    size: s.chart.size,
+                    evaluated: s.evaluated,
+                    inLibrary: s.chart.inLibrary,
+                    requestedAlready: s.chart.alreadyRequested,
+                    willRequest: s.chart.willRequest,
+                    overCap: s.chart.overCap,
+                  })}
+                  {s.chart.short ? ` ${t(`${p}.chartShort`, { target: plan.targetCount })}` : ''}
+                  {s.exhausted ? ` ${t(`${p}.exhausted`)}` : ''}
+                  {s.depthCapped ? ` ${t(`${p}.depthCapped`)}` : ''}
+                </Typography>
+              )}
+              {!s.chart && (
               <Typography variant="body2" sx={{ mb: 1 }}>
                 {t(`${p}.summary`, { evaluated: s.evaluated, selected: s.selected, skipped: s.skipped, excluded: s.excluded, uncertain: s.uncertain, overCap: s.overCap })}
                 {s.exhausted ? ` ${t(`${p}.exhausted`)}` : ''}
                 {s.depthCapped ? ` ${t(`${p}.depthCapped`)}` : ''}
               </Typography>
+              )}
               {plan.warnings.map((w) => (
                 <Alert key={w} severity="warning" sx={{ mb: 1 }}>
                   {w}
@@ -215,44 +286,31 @@ export function AutoRequestPreviewDialog({ open, onClose, hasUnsavedChanges }: P
               ))}
               {plan.result.entries.length === 0 ? (
                 <Typography color="text.secondary">{t(`${p}.empty`)}</Typography>
+              ) : s.chart ? (
+                <>
+                  <Typography variant="subtitle2" sx={{ mt: 1 }}>
+                    {t(`${p}.chartTitle`, { target: plan.targetCount })}
+                  </Typography>
+                  {renderTable(
+                    plan.result.entries.filter((e) => e.chartPosition !== undefined),
+                    plan,
+                    true
+                  )}
+                  <Typography variant="subtitle2" sx={{ mt: 2 }}>
+                    {t(`${p}.notInChartTitle`)}
+                  </Typography>
+                  {plan.result.entries.some((e) => e.chartPosition === undefined) ? (
+                    renderTable(
+                      plan.result.entries.filter((e) => e.chartPosition === undefined),
+                      plan,
+                      false
+                    )
+                  ) : (
+                    <Typography color="text.secondary">{t(`${p}.notInChartEmpty`)}</Typography>
+                  )}
+                </>
               ) : (
-                <Box sx={{ overflowX: 'auto' }}>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>{t(`${p}.col.rank`)}</TableCell>
-                        <TableCell>{t(`${p}.col.title`)}</TableCell>
-                        <TableCell>{t(`${p}.col.status`)}</TableCell>
-                        <TableCell>{t(`${p}.col.countries`)}</TableCell>
-                        <TableCell>{t(`${p}.col.genres`)}</TableCell>
-                        <TableCell>{t(`${p}.col.keywords`)}</TableCell>
-                        <TableCell>{t(`${p}.col.decision`)}</TableCell>
-                        <TableCell>{t(`${p}.col.reasons`)}</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {plan.result.entries.map((e) => (
-                        <TableRow key={`${e.tmdbId}-${e.rank}`} sx={e.decision === 'selected' ? { backgroundColor: 'action.hover' } : undefined}>
-                          <TableCell>#{e.rank}</TableCell>
-                          <TableCell>
-                            {e.title}
-                            {e.year ? ` (${e.year})` : ''}
-                          </TableCell>
-                          <TableCell>{statusText(e)}</TableCell>
-                          <TableCell>{e.countries === null ? '—' : e.countries.length === 0 ? t(`${p}.none`) : e.countries.join(', ')}</TableCell>
-                          <TableCell>
-                            {e.genreIds === null ? '—' : e.genreIds.map((id) => genreNames[plan.mediaType].get(id) ?? String(id)).join(', ') || t(`${p}.none`)}
-                          </TableCell>
-                          <TableCell>{e.matchedKeywords.map((k) => k.name).join(', ') || '—'}</TableCell>
-                          <TableCell>
-                            <Chip size="small" variant={e.decision === 'selected' ? 'filled' : 'outlined'} color={DECISION_COLOR[e.decision]} label={t(`${p}.decision.${e.decision}`)} />
-                          </TableCell>
-                          <TableCell>{e.reasons.map((r) => reasonText(r.code, r.detail)).join('; ')}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </Box>
+                renderTable(plan.result.entries, plan, false)
               )}
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
                 {t(`${p}.generated`, { time: new Date(data.generatedAt).toLocaleTimeString(i18n.language) })}
