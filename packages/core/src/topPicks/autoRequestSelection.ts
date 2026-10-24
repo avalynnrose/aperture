@@ -57,6 +57,7 @@ export interface Reason {
     | 'genre-excluded'
     | 'keyword-excluded'
     | 'not-released'
+    | 'manually-skipped'
     | 'metadata-unavailable'
     | 'metadata-missing'
     | 'cap-reached'
@@ -264,6 +265,7 @@ export async function selectAutoRequests(
 
   const entries: PlanEntry[] = []
   const seen = new Set<number>()
+  const skipped = new Set(rules.skippedTitles.map((t) => t.tmdbId))
   let eligible = 0
   let evaluated = 0
   // legacy: slots used by titles we will request plus titles already requested in Seerr
@@ -303,6 +305,11 @@ export async function selectAutoRequests(
       continue
     }
     seen.add(c.tmdbId)
+
+    if (skipped.has(c.tmdbId)) {
+      finish('excluded', [{ code: 'manually-skipped' }])
+      continue
+    }
 
     if (c.inLibrary) {
       finish('skipped', [{ code: 'in-library' }])
@@ -399,6 +406,7 @@ async function selectTopNEligible(
 
   const entries: PlanEntry[] = []
   const seen = new Set<number>()
+  const skipped = new Set(rules.skippedTitles.map((t) => t.tmdbId))
   let chartSize = 0
   let toRequest = 0
   let evaluated = 0
@@ -431,6 +439,11 @@ async function selectTopNEligible(
       continue
     }
     seen.add(c.tmdbId)
+
+    if (skipped.has(c.tmdbId)) {
+      finish('excluded', [{ code: 'manually-skipped' }])
+      continue
+    }
 
     const metadata = needsMetadata(c, rules) ? await deps.getMetadata(c) : null
     const f = evaluateFilters(c, metadata, rules, today)

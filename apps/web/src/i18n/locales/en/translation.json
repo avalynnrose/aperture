@@ -3653,7 +3653,14 @@
           "will-request": "Will request",
           "over-cap": "Over per-run cap"
         },
+        "skipTooltip": "Skip this title: it is never requested and the next eligible title takes its place",
+        "skipAria": "Skip {{title}}",
+        "undoSkip": "Undo skip",
+        "skipError": "Could not change the skipped list",
+        "skippedTitle": "Skipped by you ({{count}})",
+        "skippedHelp": "These titles are never requested automatically, whatever the filters say. Remove one to allow it again.",
         "col": {
+          "actions": "Skip",
           "place": "Place",
           "rank": "Rank",
           "title": "Title",
@@ -3688,6 +3695,7 @@
           "genre-excluded": "Excluded genre",
           "keyword-excluded": "Excluded keyword",
           "not-released": "Not released yet",
+          "manually-skipped": "Skipped by you",
           "metadata-unavailable": "TMDB lookup failed (never requested)",
           "metadata-missing": "TMDB has no data for",
           "cap-reached": "Per-run cap reached"

@@ -367,3 +367,42 @@ test('rules: skipUnreleased and the chart strategy parse; bad values are rejecte
   assert.equal(p.skipUnreleased, true)
   assert.throws(() => parseAutoRequestRules({ skipUnreleased: 'yes' }), /skipUnreleased/)
 })
+
+// ---- skipped titles (the X in the preview) -------------------------------------------------
+
+const skip = (...ids: number[]) => ids.map((tmdbId) => ({ tmdbId, title: `Title ${tmdbId - 1000}` }))
+
+test('skipped title: never requested, takes no chart place, the next eligible title fills it', async () => {
+  const { d, calls } = deps()
+  const r = await selectAutoRequests(ranked(30), chartRules({ targetCount: 5, skippedTitles: skip(1002, 1004) }), { perRunCap: 25 }, d)
+  assert.deepEqual(ids(r), [1, 3, 5, 6, 7])
+  assert.deepEqual(r.entries.filter((e) => e.chartPosition !== undefined).map((e) => e.rank), [1, 3, 5, 6, 7])
+  const e2 = r.entries.find((e) => e.rank === 2)!
+  assert.equal(e2.decision, 'excluded')
+  assert.deepEqual(e2.reasons.map((x) => x.code), ['manually-skipped'])
+  assert.equal(calls.requested, 5, 'no Seerr or TMDB call is made for a skipped title')
+})
+
+test('skipped title that is already in the library or already requested also leaves the chart', async () => {
+  const list = ranked(10, (r) => ({ inLibrary: r === 1 }))
+  const f: Fakes = { requested: new Set([1002]) }
+  const r = await selectAutoRequests(list, chartRules({ targetCount: 3, skippedTitles: skip(1001, 1002) }), { perRunCap: 25 }, deps(f).d)
+  assert.deepEqual(r.entries.filter((e) => e.chartPosition !== undefined).map((e) => e.rank), [3, 4, 5])
+})
+
+test('skipped title is honoured by legacy, strict and fill as well; fill walks past it, strict does not refill', async () => {
+  for (const strategy of ['legacy', 'fill'] as const) {
+    const r = await selectAutoRequests(ranked(20), rules({ strategy, targetCount: 3, skippedTitles: skip(1001) }), { perRunCap: 25 }, deps().d)
+    assert.deepEqual(ids(r), [2, 3, 4], strategy)
+  }
+  const s = await selectAutoRequests(ranked(20), rules({ strategy: 'strict', targetCount: 3, skippedTitles: skip(1001) }), { perRunCap: 25 }, deps().d)
+  assert.deepEqual(ids(s), [2, 3])
+})
+
+test('skippedTitles: parsed, de-duplicated by TMDB id, validated; default is empty', () => {
+  assert.deepEqual(DEFAULT_AUTO_REQUEST_RULES.skippedTitles, [])
+  const p = parseAutoRequestRules({ skippedTitles: [{ tmdbId: 5, title: 'A' }, { tmdbId: 5, title: 'B' }, { tmdbId: 6, title: 'C' }] })
+  assert.deepEqual(p.skippedTitles, [{ tmdbId: 5, title: 'A' }, { tmdbId: 6, title: 'C' }])
+  assert.throws(() => parseAutoRequestRules({ skippedTitles: [{ tmdbId: 0, title: 'x' }] }), /skippedTitles/)
+  assert.throws(() => parseAutoRequestRules({ skippedTitles: [{ tmdbId: 1, title: '' }] }), /skippedTitles/)
+})

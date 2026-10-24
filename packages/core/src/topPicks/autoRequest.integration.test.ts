@@ -287,3 +287,26 @@ test('Top N Eligible: preview is read-only and the chart is the same on every ru
   assert.equal(a.planId, b.planId)
   assert.deepEqual(a.result.entries, b.result.entries)
 })
+
+test('skipping a title: stored without touching other rules, survives a normal settings save, fills from below and can be undone', opts, async () => {
+  await configure({ strategy: 'chart', targetCount: 4, ...FILTERS })
+  const base = await core.planAutoRequests('movie', await core.getTopPicksConfig())
+  assert.deepEqual(ids(base), [504, 505]) // chart: 501 owned, 502 requested, 504, 505
+  const before = (await core.getTopPicksConfig()).moviesAutoRequestRules
+  const rules = await core.setAutoRequestTitleSkipped('movie', { tmdbId: 505, title: 'Doc B' }, true)
+  assert.deepEqual(rules.skippedTitles, [{ tmdbId: 505, title: 'Doc B' }])
+  const afterSkip = (await core.getTopPicksConfig()).moviesAutoRequestRules
+  assert.deepEqual({ ...afterSkip, skippedTitles: [] }, { ...before, skippedTitles: [] }, 'only the skipped list changed')
+  const plan = await core.planAutoRequests('movie', await core.getTopPicksConfig())
+  assert.deepEqual(ids(plan), [504, 507]) // 505 skipped, 507 fills the place (506 is excluded by country)
+  assert.notEqual(plan.planId, base.planId, 'a preview made before the skip is stale')
+  // a normal settings save (even one carrying an old list) keeps the stored list
+  await core.updateTopPicksConfig({ moviesAutoRequestRules: { ...afterSkip, skippedTitles: [], targetCount: 4 } as never })
+  assert.deepEqual((await core.getTopPicksConfig()).moviesAutoRequestRules.skippedTitles, [{ tmdbId: 505, title: 'Doc B' }])
+  // the job requests exactly what the preview showed
+  await core.runAutoRequestJob(undefined, { plans: { movie: plan } })
+  assert.deepEqual(postedIds(), [504, 507])
+  // undo
+  await core.setAutoRequestTitleSkipped('movie', { tmdbId: 505, title: 'x' }, false)
+  assert.deepEqual((await core.getTopPicksConfig()).moviesAutoRequestRules.skippedTitles, [])
+})
