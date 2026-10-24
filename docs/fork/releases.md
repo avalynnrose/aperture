@@ -1,7 +1,7 @@
 # Releases and version tags (fork)
 
 This fork is independently maintained. Its versions are written `v<upstream version>-fork.<N>`,
-for example `v0.7.10-fork.4`: upstream Aperture 0.7.10 plus the fork's fourth release.
+for example `v0.7.10-fork.5`: upstream Aperture 0.7.10 plus the fork's fifth release.
 
 ## Rules
 
@@ -32,11 +32,15 @@ for example `v0.7.10-fork.4`: upstream Aperture 0.7.10 plus the fork's fourth re
 - If a moving convenience tag is ever wanted, make it per upstream line (for example
   `v0.7.10-fork`) rather than `latest`, and document that it moves.
 
+## Release process
+
+Every release follows [release-checklist.md](release-checklist.md). Release notes are kept in `docs/fork/release-notes/` and copied into the GitHub Release.
+
 ## Image status
 
 Published images are **linux/amd64 only**. On other architectures (for example ARM), build from source.
 
 The container package is currently **private**, so the published image cannot be pulled by
 others yet. See the README ("Using the fork's image"). Source builds from a tag are
-equivalent to the published image: the published `v0.7.10-fork.3` and `v0.7.10-fork.4` images were
-checked file by file against separate builds of the same commit.
+equivalent to the published image: the published images are checked file by file against a separate
+build of the same commit before a release is announced.
