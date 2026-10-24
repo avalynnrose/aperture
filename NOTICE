@@ -1,0 +1,54 @@
+Aperture (independently maintained fork)
+========================================
+
+This repository is a MODIFIED version of Aperture, originally written by the Aperture
+authors and published at https://github.com/dgruhin-hrizn/aperture . It is not affiliated
+with, endorsed by, or supported by the upstream project.
+
+Licence
+-------
+Aperture and this fork are licensed under the GNU Affero General Public License,
+version 3 (AGPL-3.0). The full text is in the LICENSE file, unchanged from upstream.
+Upstream copyright and licence notices are retained. Third-party components (see the
+package.json files and pnpm-lock.yaml) keep their own licences.
+
+Source code (AGPL-3.0 section 13)
+---------------------------------
+The Corresponding Source of this fork is this repository:
+https://github.com/avalynnrose/aperture . Container images built from it carry the
+label org.opencontainers.image.source and a release tag (for example v0.7.10-fork.4);
+the tag identifies the exact source. The running application shows a "Source code"
+link on the sign-in page and in the sidebar. If you modify this software and let others
+use it over a network, you must offer them your modified source in the same way; change
+the link in apps/web/src/components/SourceLink.tsx to point at it.
+
+Modifications relative to upstream v0.7.10 (upstream commit 99cc9369df)
+----------------------------------------------------------------------
+Dates are the dates the changes were made; release tags are annotated tags in this repository.
+
+2026-10-22  v0.7.10-fork.1
+  - Top Picks Requester setting: choose which Seerr user is credited with automatic
+    requests (migration 0115).
+  - TV season selection for automatic requests: all seasons or season 1 only (migration 0115).
+  - Container health check uses 127.0.0.1 instead of localhost.
+  - Continuous-integration workflow (tests, type check, lint, build, migration replay).
+
+2026-10-22  v0.7.10-fork.2
+  - Auto-request rules (migration 0116): selection strategies (Missing-first, Strict Top N,
+    Fill to N), country / genre / TMDB keyword filters, optional hybrid-blend ranking,
+    per-run request cap, read-only preview shared with the job, confirmation for manual runs.
+  - Publishing safeguards: image publishing only by manual, owner-approved, tag-bound workflow.
+
+2026-10-23  v0.7.10-fork.3
+  - "Top N Eligible" selection strategy (new default) and "Skip unreleased titles" switch.
+    No new migration (stored inside the existing rules JSON).
+
+2026-10-23  v0.7.10-fork.4
+  - Skip individual titles from the auto-request preview (saved per media type).
+    No new migration.
+
+2026-10-23  public-release preparation
+  - README rewritten for this fork; docker-compose.fork.yml (build from source) and
+    docker-compose.fork-image.example.yml; docs/fork/*; this NOTICE file.
+  - "Source code" links in the application and API metadata.
+  - Removed the unused upstream branch-sync workflow (.github/workflows/sync-dev.yml).
