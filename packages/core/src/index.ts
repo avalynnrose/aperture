@@ -448,6 +448,8 @@ export {
   computePlanId,
   parseAutoRequestRules,
   readStoredAutoRequestRules,
+  setAutoRequestTitleSkipped,
+  type SkippedTitle,
   DEFAULT_AUTO_REQUEST_RULES,
   type AutoRequestPlan,
   type AutoRequestMediaType,

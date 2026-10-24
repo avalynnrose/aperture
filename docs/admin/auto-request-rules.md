@@ -39,6 +39,13 @@ Filters are applied to titles you already own as well, so an owned title that ma
 ### Example (Strict and Fill)
 With *N* = 10: if the first ten ranked titles contain eight that are owned or excluded, **Strict** requests the other two; **Fill** keeps going down the ranking until it has ten, if there are that many.
 
+### Skipping single titles
+In the preview, each title that would take a chart place or be requested has a **✕** button. Clicking it skips that one title: it is never requested automatically, it takes no chart place, and the next eligible title fills its place (with Top N Eligible and Fill to N; Strict Top N does not refill). Skipped titles are listed under **Skipped by you** in the preview; remove one there (or press *Undo skip* in the table) to allow it again.
+
+- The skipped list is saved per media type, so the scheduled job honours it as well as manual runs. It is separate from the filters and does not change them.
+- Saving the settings page never changes the skipped list; only the ✕ and undo buttons do. Changing it makes an earlier preview stale, so a manual run asks you to review again.
+- It applies to every strategy and to titles that are already owned or requested (they simply leave the chart).
+
 ## Ranking
 
 The ranking is the list the strategies work through. It is shown as the **original rank** in the preview and in the job log.
@@ -89,7 +96,7 @@ Rules are stored as JSON in two new columns of the Top Picks configuration (migr
 
 If you roll back to an earlier build that does not know these rules (for example the first fork release), it will ignore the rules and request without your filters. **Pause auto-request for movies and series before rolling back**, and re-enable it only after you are on a build that supports the rules again.
 
-A build from before the `chart` strategy and `skipUnreleased` switch was added (the previous fork release) rejects stored rules that contain them and falls back to its defaults, which request without your filters. Before rolling back to it, pause auto-request and rewrite the stored rules without those two fields (with the strategy set to Strict or Fill).
+The skipped-titles list is stored in the same JSON and is likewise unknown to earlier builds. A build from before the `chart` strategy, `skipUnreleased` switch or `skippedTitles` list was added (the previous fork release) rejects stored rules that contain them and falls back to its defaults, which request without your filters. Before rolling back to it, pause auto-request and rewrite the stored rules without those fields (with the strategy set to Strict or Fill).
 
 ## Limits and notes
 - Depth is capped (default 200, maximum 500 ranked titles). Fill may stop at the cap before reaching *N*; the summary says when.

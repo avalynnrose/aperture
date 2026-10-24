@@ -505,11 +505,12 @@ export async function updateTopPicksConfig(
     values.push(updates.seriesAutoRequestSeasons)
   }
   if (updates.moviesAutoRequestRules !== undefined) {
-    setClauses.push(`movies_auto_request_rules = $${paramIndex++}::jsonb`)
+    // skippedTitles is managed by its own endpoints; a normal save keeps the stored list.
+    setClauses.push(`movies_auto_request_rules = $${paramIndex++}::jsonb || jsonb_build_object('skippedTitles', COALESCE(movies_auto_request_rules->'skippedTitles', '[]'::jsonb))`)
     values.push(JSON.stringify(parseAutoRequestRules(updates.moviesAutoRequestRules)))
   }
   if (updates.seriesAutoRequestRules !== undefined) {
-    setClauses.push(`series_auto_request_rules = $${paramIndex++}::jsonb`)
+    setClauses.push(`series_auto_request_rules = $${paramIndex++}::jsonb || jsonb_build_object('skippedTitles', COALESCE(series_auto_request_rules->'skippedTitles', '[]'::jsonb))`)
     values.push(JSON.stringify(parseAutoRequestRules(updates.seriesAutoRequestRules)))
   }
   // Language filters
@@ -561,6 +562,30 @@ export async function updateTopPicksLastRefreshed(): Promise<void> {
     WHERE id = 1
   `)
   logger.info('Top Picks last_refreshed_at updated')
+}
+
+/**
+ * Add or remove one title on the auto-request "skipped titles" list (the X in the preview).
+ * Only the list changes; every other rule is left as stored. Bumps updated_at, so a preview built
+ * before the change is treated as stale by the manual-run check.
+ */
+export async function setAutoRequestTitleSkipped(
+  mediaType: 'movie' | 'tv',
+  title: { tmdbId: number; title: string },
+  skipped: boolean
+): Promise<AutoRequestRules> {
+  const column = mediaType === 'movie' ? 'movies_auto_request_rules' : 'series_auto_request_rules'
+  const row = await queryOne<{ rules: unknown }>(`SELECT ${column} AS rules FROM top_picks_config WHERE id = 1`)
+  if (!row) throw new Error('Top Picks configuration not found')
+  const current = readStoredAutoRequestRules(row.rules).rules
+  const others = current.skippedTitles.filter((t) => t.tmdbId !== title.tmdbId)
+  const next = parseAutoRequestRules({
+    ...current,
+    skippedTitles: skipped ? [...others, { tmdbId: title.tmdbId, title: title.title }] : others,
+  })
+  await query(`UPDATE top_picks_config SET ${column} = $1::jsonb, updated_at = NOW() WHERE id = 1`, [JSON.stringify(next)])
+  logger.info({ mediaType, tmdbId: title.tmdbId, skipped }, 'Auto-request skipped title changed')
+  return next
 }
 
 /**

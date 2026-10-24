@@ -25,6 +25,8 @@ export interface AutoRequestRules {
   excludedKeywords: { id: number; name: string }[]
   missingMetadata: 'skip' | 'allow'
   skipUnreleased: boolean
+  /** managed from the preview (X button); a normal save keeps the stored list */
+  skippedTitles: { tmdbId: number; title: string }[]
 }
 
 export interface TopPicksConfig {
@@ -226,6 +228,7 @@ export interface AutoRequestPlanView {
   candidateCount: number
   warnings: string[]
   planId: string
+  rules: AutoRequestRules
   result: { entries: AutoRequestPlanEntry[]; summary: AutoRequestPlanSummary }
 }
 

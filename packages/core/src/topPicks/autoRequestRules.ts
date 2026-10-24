@@ -62,6 +62,19 @@ export interface AutoRequestRules {
    * in the future). Unreleased titles are excluded like any other filter and take no chart slot.
    */
   skipUnreleased: boolean
+  /**
+   * Titles the admin removed from automatic requests one by one (the X in the preview). They take no
+   * chart place and are never requested. Managed through dedicated endpoints; a normal settings save
+   * keeps the stored list as it is.
+   */
+  skippedTitles: SkippedTitle[]
+}
+
+export interface SkippedTitle {
+  /** TMDB id */
+  tmdbId: number
+  /** name at the time it was skipped, so the list stays readable */
+  title: string
 }
 
 export const DEFAULT_AUTO_REQUEST_RULES: AutoRequestRules = {
@@ -74,6 +87,7 @@ export const DEFAULT_AUTO_REQUEST_RULES: AutoRequestRules = {
   excludedKeywords: [],
   missingMetadata: 'skip',
   skipUnreleased: false,
+  skippedTitles: [],
 }
 
 const uniqueSorted = <T extends number | string>(xs: T[]): T[] =>
@@ -105,17 +119,24 @@ export const AutoRequestRulesSchema = z
       .default([]),
     missingMetadata: z.enum(['skip', 'allow']).default('skip'),
     skipUnreleased: z.boolean().default(false),
+    skippedTitles: z
+      .array(z.object({ tmdbId: z.number().int().positive(), title: z.string().trim().min(1).max(300) }).strict())
+      .max(500)
+      .default([]),
   })
   .strict()
 
 function normalize(parsed: z.infer<typeof AutoRequestRulesSchema>): AutoRequestRules {
   const seen = new Set<number>()
   const keywords = parsed.excludedKeywords.filter((k) => (seen.has(k.id) ? false : (seen.add(k.id), true)))
+  const skippedSeen = new Set<number>()
+  const skippedTitles = parsed.skippedTitles.filter((t) => (skippedSeen.has(t.tmdbId) ? false : (skippedSeen.add(t.tmdbId), true)))
   return {
     ...parsed,
     countries: { ...parsed.countries, codes: uniqueSorted(parsed.countries.codes) },
     excludedGenreIds: uniqueSorted(parsed.excludedGenreIds),
     excludedKeywords: keywords,
+    skippedTitles,
   }
 }
 

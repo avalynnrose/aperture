@@ -167,6 +167,7 @@ Choose *which* missing titles are requested automatically. Details: [docs/admin/
 - **Strategies:** **Top N Eligible** (default: a chart of the first *N* ranked titles that pass your filters; owned and already-requested titles hold their place without a new request, excluded and unreleased titles take none), *Missing-first* (the upstream behavior), **Strict Top N**, **Fill to N**; separate settings and target count for movies and TV, plus the existing per-run maximum as an independent safety cap.
 - **Ranking:** external list order (default) or the hybrid blend the Top Picks display uses (hybrid sources only).
 - **Filters:** country of origin (include or exclude), TMDB genres, TMDB keywords, an optional *skip unreleased titles* switch, alongside the existing language filter. Failed or empty metadata is never silently treated as a match.
+- **Skip single titles:** a ✕ in the preview removes one title from automatic requests (saved per media type, undoable) and the next eligible title fills its place.
 - **Preview:** a read-only table of the ranked candidates with original rank, status, filter matches and reasons, built by the same code as the real run. Manual runs ask for confirmation.
 - **Defaults:** the filters and the unreleased switch are off until you turn them on; the default strategy is Top N Eligible, and *Missing-first* restores upstream behavior.
 

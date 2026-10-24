@@ -5,6 +5,8 @@ import {
   Button,
   Chip,
   CircularProgress,
+  IconButton,
+  Tooltip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -20,6 +22,7 @@ import {
   Tabs,
   Typography,
 } from '@mui/material'
+import CloseIcon from '@mui/icons-material/Close'
 import { useTranslation } from 'react-i18next'
 import { useTmdbGenres } from './hooks/useTmdbGenres'
 import { countryName } from './countries'
@@ -60,6 +63,8 @@ export function AutoRequestPreviewDialog({ open, onClose, hasUnsavedChanges }: P
   const [run, setRun] = useState<RunState>({ status: 'idle' })
   const [changedNotice, setChangedNotice] = useState(false)
   const [now, setNow] = useState(() => Date.now())
+  const [skipBusy, setSkipBusy] = useState(false)
+  const [skipError, setSkipError] = useState<string | null>(null)
 
   const movieGenres = useTmdbGenres('movie')
   const tvGenres = useTmdbGenres('tv')
@@ -84,6 +89,31 @@ export function AutoRequestPreviewDialog({ open, onClose, hasUnsavedChanges }: P
       setLoading(false)
     }
   }, [])
+
+  /** Skip (or un-skip) one title for automatic requests, then rebuild the preview so the next eligible title fills the place. */
+  const changeSkip = async (mediaType: 'movie' | 'tv', entry: { tmdbId: number; title: string }, skip: boolean) => {
+    setSkipBusy(true)
+    setSkipError(null)
+    try {
+      const r = skip
+        ? await fetch('/api/settings/top-picks/auto-request/skipped', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mediaType, tmdbId: entry.tmdbId, title: entry.title }),
+          })
+        : await fetch(`/api/settings/top-picks/auto-request/skipped?mediaType=${mediaType}&tmdbId=${entry.tmdbId}`, {
+            method: 'DELETE',
+            credentials: 'include',
+          })
+      if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? `HTTP ${r.status}`)
+      await load()
+    } catch (err) {
+      setSkipError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSkipBusy(false)
+    }
+  }
 
   useEffect(() => {
     if (open) void load()
@@ -167,6 +197,7 @@ export function AutoRequestPreviewDialog({ open, onClose, hasUnsavedChanges }: P
             <TableCell>{t(`${p}.col.keywords`)}</TableCell>
             <TableCell>{t(`${p}.col.decision`)}</TableCell>
             <TableCell>{t(`${p}.col.reasons`)}</TableCell>
+            <TableCell>{t(`${p}.col.actions`)}</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -192,6 +223,21 @@ export function AutoRequestPreviewDialog({ open, onClose, hasUnsavedChanges }: P
                 )}
               </TableCell>
               <TableCell>{e.reasons.map((r) => reasonText(r.code, r.detail)).join('; ')}</TableCell>
+              <TableCell>
+                {e.reasons.some((r) => r.code === 'manually-skipped') ? (
+                  <Button size="small" disabled={skipBusy} onClick={() => void changeSkip(pl.mediaType, e, false)}>
+                    {t(`${p}.undoSkip`)}
+                  </Button>
+                ) : e.chartPosition !== undefined || e.decision === 'selected' || e.decision === 'over-cap' ? (
+                  <Tooltip title={t(`${p}.skipTooltip`)}>
+                    <span>
+                      <IconButton size="small" aria-label={t(`${p}.skipAria`, { title: e.title })} disabled={skipBusy} onClick={() => void changeSkip(pl.mediaType, e, true)}>
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                ) : null}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -216,6 +262,11 @@ export function AutoRequestPreviewDialog({ open, onClose, hasUnsavedChanges }: P
           {changedNotice && (
             <Alert severity="warning" sx={{ mb: 2 }}>
               {t(`${p}.planChanged`)}
+            </Alert>
+          )}
+          {skipError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {t(`${p}.skipError`)}: {skipError}
             </Alert>
           )}
           {stale && (
@@ -311,6 +362,25 @@ export function AutoRequestPreviewDialog({ open, onClose, hasUnsavedChanges }: P
                 </>
               ) : (
                 renderTable(plan.result.entries, plan, false)
+              )}
+              {plan.rules.skippedTitles.length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2">{t(`${p}.skippedTitle`, { count: plan.rules.skippedTitles.length })}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                    {t(`${p}.skippedHelp`)}
+                  </Typography>
+                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                    {plan.rules.skippedTitles.map((st) => (
+                      <Chip
+                        key={st.tmdbId}
+                        size="small"
+                        label={st.title}
+                        disabled={skipBusy}
+                        onDelete={() => void changeSkip(plan.mediaType, st, false)}
+                      />
+                    ))}
+                  </Stack>
+                </Box>
               )}
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
                 {t(`${p}.generated`, { time: new Date(data.generatedAt).toLocaleTimeString(i18n.language) })}

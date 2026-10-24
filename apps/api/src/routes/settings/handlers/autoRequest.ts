@@ -4,6 +4,8 @@
  * - POST /api/settings/top-picks/auto-request/preview   Read-only plan of what an auto-request run would do
  * - GET  /api/settings/top-picks/auto-request/keywords  Search TMDB keywords (?q=)
  * - GET  /api/settings/top-picks/auto-request/genres    TMDB genre list (?mediaType=movie|tv)
+ * - POST   /api/settings/top-picks/auto-request/skipped  Skip one title (the X in the preview)
+ * - DELETE /api/settings/top-picks/auto-request/skipped  Undo a skip (?mediaType=&tmdbId=)
  *
  * The preview builds the same plan the job executes. It only reads (library database, TMDB, Seerr
  * request status); nothing in this file can create a Seerr request.
@@ -64,6 +66,45 @@ export function registerAutoRequestHandlers(fastify: FastifyInstance) {
       const genres = mediaType === 'movie' ? await getMovieGenresList() : await getTVGenresList()
       if (genres.length === 0) return reply.status(502).send({ error: 'Could not load TMDB genres (is a TMDB API key configured?)' })
       return reply.send({ genres: genres.map((g) => ({ id: g.id, name: g.name })) })
+    }
+  )
+
+  // The skipped list is the only thing these two endpoints change. They never create a request.
+  fastify.post<{ Body: { mediaType?: string; tmdbId?: number; title?: string } }>(
+    '/api/settings/top-picks/auto-request/skipped',
+    { ...adminOnly, schema: { tags: ['settings'], summary: 'Skip one title for automatic requests' } },
+    async (request, reply) => {
+      const { mediaType, tmdbId, title } = request.body ?? {}
+      if (mediaType !== 'movie' && mediaType !== 'tv') return reply.status(400).send({ error: 'mediaType must be movie or tv' })
+      if (!Number.isInteger(tmdbId) || (tmdbId as number) <= 0) return reply.status(400).send({ error: 'tmdbId must be a positive integer' })
+      if (typeof title !== 'string' || title.trim() === '') return reply.status(400).send({ error: 'title is required' })
+      try {
+        const { setAutoRequestTitleSkipped } = await import('@aperture/core')
+        const rules = await setAutoRequestTitleSkipped(mediaType, { tmdbId: tmdbId as number, title: title.trim().slice(0, 300) }, true)
+        return reply.send({ skippedTitles: rules.skippedTitles })
+      } catch (err) {
+        fastify.log.error({ err }, 'Failed to skip title')
+        return reply.status(400).send({ error: err instanceof Error ? err.message : 'Failed to skip title' })
+      }
+    }
+  )
+
+  fastify.delete<{ Querystring: { mediaType?: string; tmdbId?: string } }>(
+    '/api/settings/top-picks/auto-request/skipped',
+    { ...adminOnly, schema: { tags: ['settings'], summary: 'Undo a skipped title' } },
+    async (request, reply) => {
+      const { mediaType } = request.query
+      const tmdbId = Number(request.query.tmdbId)
+      if (mediaType !== 'movie' && mediaType !== 'tv') return reply.status(400).send({ error: 'mediaType must be movie or tv' })
+      if (!Number.isInteger(tmdbId) || tmdbId <= 0) return reply.status(400).send({ error: 'tmdbId must be a positive integer' })
+      try {
+        const { setAutoRequestTitleSkipped } = await import('@aperture/core')
+        const rules = await setAutoRequestTitleSkipped(mediaType, { tmdbId, title: 'x' }, false)
+        return reply.send({ skippedTitles: rules.skippedTitles })
+      } catch (err) {
+        fastify.log.error({ err }, 'Failed to undo skipped title')
+        return reply.status(400).send({ error: err instanceof Error ? err.message : 'Failed to undo skipped title' })
+      }
     }
   )
 }
