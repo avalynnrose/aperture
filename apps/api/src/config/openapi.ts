@@ -59,8 +59,9 @@ All errors return JSON with an \`error\` field:
 `.trim(),
   version: API_VERSION,
   contact: {
-    name: 'Aperture',
-    url: 'https://github.com/dgruhin-hrizn/aperture',
+    // Independently maintained fork; upstream project: https://github.com/dgruhin-hrizn/aperture
+    name: 'Aperture (personal fork)',
+    url: 'https://github.com/avalynnrose/aperture',
   },
   license: {
     name: 'AGPL-3.0',

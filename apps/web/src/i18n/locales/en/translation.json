@@ -1080,6 +1080,10 @@
       "lowest": "Lowest"
     }
   },
+  "about": {
+    "sourceCode": "Source code (AGPL-3.0)",
+    "forkNotice": "Independently maintained fork of Aperture"
+  },
   "login": {
     "title": "Welcome back",
     "subtitle": "Sign in with your media server credentials",

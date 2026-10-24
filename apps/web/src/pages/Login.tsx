@@ -14,6 +14,7 @@ import {
 import { useTheme } from '@mui/material/styles'
 import { useAuth } from '@/hooks/useAuth'
 import { useTranslation } from 'react-i18next'
+import { SourceLink } from '@/components/SourceLink'
 
 export function LoginPage() {
   const { t } = useTranslation()
@@ -309,6 +310,16 @@ export function LoginPage() {
             mt={3}
           >
             {t('login.footerProviders')}
+          </Typography>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            display="block"
+            textAlign="center"
+            mt={1}
+            sx={{ opacity: 0.7 }}
+          >
+            {t('about.forkNotice')} · <SourceLink fontSize="inherit" />
           </Typography>
         </CardContent>
       </Card>

@@ -1,91 +1,107 @@
-# Aperture
+# Aperture — independently maintained fork
 
-[![Version](https://img.shields.io/badge/version-0.7.10-blue.svg)](https://github.com/dgruhin-hrizn/aperture/releases)
-[![Docker Image](https://img.shields.io/badge/docker-ghcr.io%2Fdgruhin--hrizn%2Faperture-blue?logo=docker)](https://github.com/dgruhin-hrizn/aperture/pkgs/container/aperture)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
-> ## Personal Fork
+> ## Personal fork — read this first
 >
-> This is a personal fork of Aperture maintained primarily for my own homelab.
+> This is an **independently maintained personal fork** of [Aperture](https://github.com/dgruhin-hrizn/aperture) by dgruhin-hrizn (AGPL-3.0). It is **not affiliated with, endorsed by or supported by the upstream project**, and support here is best effort. It is based on upstream **v0.7.10** (commit `99cc9369df`) and adds improvements to automatic Seerr requests. Everything else is upstream's work; see [NOTICE](NOTICE) for the dated list of modifications.
 >
-> It includes experimental enhancements to automatic Seerr requests, including configurable content filters and selection strategies.
->
-> This fork is not officially affiliated with or supported by the original Aperture project. Updates and support are provided on a best-effort basis.
->
-> Upstream project: [dgruhin-hrizn/aperture](https://github.com/dgruhin-hrizn/aperture) (AGPL-3.0; see [LICENSE](LICENSE)). Fork changes are listed in [Fork Changes](#fork-changes).
->
-> Released images are built from tagged commits of this repository (for example `v0.7.10-fork.1`); the tag identifies the exact corresponding source.
+> - **Upstream project, documentation and support:** https://github.com/dgruhin-hrizn/aperture
+> - **This fork's source:** https://github.com/avalynnrose/aperture (release tags look like `v0.7.10-fork.4`)
+> - **The upstream container image does not include this fork's features.** The fork's own image is **not publicly pullable yet**; build from source (below).
 
-**Aperture** — AI-powered media recommendations for Emby & Jellyfin.
-
-Aperture creates personalized recommendation libraries for your media server users using OpenAI embeddings and pgvector similarity search. Recommendations appear as virtual libraries in your media server's home screen, with support for both **movies** and **TV series**.
+**Aperture** — AI-powered media recommendations for Emby & Jellyfin. It creates personalized recommendation libraries for your media server users using OpenAI embeddings and pgvector similarity search, for both **movies** and **TV series**.
 
 ---
 
-## Quick Start
+## What this fork adds
 
-### 1. Download the docker-compose file for your platform
+All additions concern the **Top Picks → Auto-Request** feature (Settings → Top Picks). Details: [Fork Changes](#fork-changes) and [docs/admin/auto-request-rules.md](docs/admin/auto-request-rules.md).
 
-| Platform        | File                          | Download                                                                                               |
-| --------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------ |
-| **Unraid**      | `docker-compose.unraid.yml`   | [Download](https://raw.githubusercontent.com/dgruhin-hrizn/aperture/main/docker-compose.unraid.yml)    |
-| **QNAP**        | `docker-compose.qnap.yml`     | [Download](https://raw.githubusercontent.com/dgruhin-hrizn/aperture/main/docker-compose.qnap.yml)      |
-| **Synology**    | `docker-compose.synology.yml` | [Download](https://raw.githubusercontent.com/dgruhin-hrizn/aperture/main/docker-compose.synology.yml)  |
-| **Windows**     | `docker-compose.windows.yml`  | [Download](https://raw.githubusercontent.com/dgruhin-hrizn/aperture/main/docker-compose.windows.yml) ¹ |
-| **Linux/Other** | `docker-compose.prod.yml`     | [Download](https://raw.githubusercontent.com/dgruhin-hrizn/aperture/main/docker-compose.prod.yml)      |
+| Feature | Summary |
+| --- | --- |
+| Top Picks Requester | Choose which Seerr user is credited with automatic requests |
+| TV seasons | Request all seasons or season 1 only |
+| Selection strategies | **Top N Eligible** (default), Missing-first (upstream behaviour), Strict Top N, Fill to N |
+| Filters | Country of origin, TMDB genres, TMDB keywords, skip unreleased titles |
+| Ranking | External list order, or the hybrid blend used by the Top Picks display |
+| Preview | Read-only chart of what the next run would request and why; ✕ to skip single titles |
+| Safety | Per-run request cap, confirmation before manual runs, failed lookups are never requested |
 
-> ¹ **Windows Users**: For Docker Desktop with Emby/Jellyfin running natively on Windows, see the [complete setup guide](docs/admin/windows-docker-desktop.md).
+### Defaults and how they differ from upstream
 
-### 2. Configure the file
+| Setting | This fork | Upstream v0.7.10 |
+| --- | --- | --- |
+| Auto-request strategy | **Top N Eligible**: a chart of the first N ranked titles that pass your filters. Titles you already own, or have already requested, hold their place without a new request; excluded and unreleased titles take none. Never requests extra titles just to reach N. | Missing-first: the first N titles that are missing from your library |
+| Filters, skip-unreleased | off | not available |
+| Requester | Seerr API-key account (same as upstream) until you choose a user | Seerr API-key account |
+| TV seasons | all seasons (same as upstream) | all seasons |
+| Manual auto-request run | asks for confirmation | runs immediately |
 
-Edit the docker-compose file and set:
+To get upstream's selection behaviour, choose **Missing-first** for movies and series.
 
-- `APP_BASE_URL` — Your server's IP address (e.g., `http://192.168.1.100:3456`)
-- `SESSION_SECRET` — A random string (32+ characters)
-- Volume paths — Adjust to match your media folder locations
+### Prerequisites
 
-### 3. Create required folders
+- A working Aperture setup (Emby or Jellyfin, PostgreSQL with pgvector, OpenAI or another provider) as in upstream.
+- **Seerr** configured in Aperture, with an **admin** API key (Seerr only honours a requesting user from an admin key).
+- A **TMDB API key** for the genre, keyword, country and release-date filters. Without it those filters cannot be evaluated, and titles that need them are never requested.
 
-```bash
-# Example for Unraid - adjust paths for your platform
-mkdir -p /mnt/user/Media/ApertureLibraries
-mkdir -p /mnt/user/appdata/aperture/backups
-```
+### Limitations
 
-### 4. Start Aperture
-
-```bash
-docker-compose -f docker-compose.[your-platform].yml up -d
-```
-
-### 5. Complete the Setup Wizard
-
-Open `http://YOUR_SERVER_IP:3456` and follow the 11-step guided setup:
-
-1. **Restore** (Optional) — Restore from an existing backup if migrating
-2. **Media Server** — Connect to your Emby/Jellyfin server
-3. **Source Libraries** — Select which libraries to analyze
-4. **File Locations** — Configure path mappings for symlinks/STRM
-5. **AI Recommendations** — Configure library naming and cover images
-6. **Validate** — Verify output configuration and paths
-7. **Users** — Select which users receive recommendations
-8. **Top Picks** (Optional) — Configure global trending libraries
-9. **AI / LLM** — Enter your OpenAI API key (or configure Ollama/other providers)
-10. **Initial Jobs** — Run first-time sync with real-time progress
-11. **Complete** — Review summary and next steps
-
-### 6. Log in
-
-Use your Emby/Jellyfin admin credentials to access Aperture.
+- Independently maintained and best effort; it only tracks upstream occasionally. Do not expect upstream support for fork features.
+- Tested with unit and integration tests in CI (mock Seerr and TMDB) and on the maintainer's own server. Not tested against every Emby/Jellyfin/Seerr combination.
+- The new screens are **English only**; other languages fall back to English for these strings.
+- MDBList lists carry no language or release-date data, so those checks use a TMDB lookup per title (cached); the existing language filter does not apply to MDBList lists.
+- Filters use TMDB data: a title TMDB cannot describe is shown as *uncertain* and is never requested.
+- The skipped-titles list and the rules are stored per media type in the database; the confirmation dialogs were verified by type checks and API tests, not by a browser test suite.
+- **Rollback is not just "start the old image"**: older builds ignore or reject newer rules and would request without your filters. Read [docs/fork/upgrading-and-rollback.md](docs/fork/upgrading-and-rollback.md) before downgrading.
 
 ---
 
-## Updating
+## Quick Start (build from source)
+
+This is the supported way to run the fork today. It needs Docker with Compose and about 4 GB of free RAM while building.
 
 ```bash
-docker-compose -f docker-compose.[your-platform].yml pull
-docker-compose -f docker-compose.[your-platform].yml up -d
+git clone https://github.com/avalynnrose/aperture.git
+cd aperture
+git checkout main                      # see the note below about release tags
+cp docker-compose.fork.yml docker-compose.local.yml
 ```
+
+1. Edit `docker-compose.local.yml` and set:
+   - `APP_BASE_URL` — the address you will open Aperture at (e.g. `http://YOUR_SERVER_IP:3456`)
+   - `SESSION_SECRET` — a random string of 32+ characters (keep the quotes)
+   - the three volume paths — see the comments in the file; the same guidance applies as in upstream's `docker-compose.prod.yml`
+2. Create the host folders you mapped (an `ApertureLibraries` folder inside your media share and a backups folder).
+3. Build and start:
+
+```bash
+docker compose -f docker-compose.local.yml build
+docker compose -f docker-compose.local.yml up -d
+```
+
+4. Open `http://YOUR_SERVER_IP:3456` and complete the setup wizard (below), then log in with your Emby/Jellyfin admin account.
+
+> **About release tags:** the build-from-source files and the in-app source link are newer than the latest release tag (`v0.7.10-fork.4`), so for now the instructions use `main`. A later release tag will include them; once it exists, check out that tag instead of `main` (see [docs/fork/releases.md](docs/fork/releases.md)). `v0.7.10-fork.4` is the version the maintainer runs and its code is the same apart from these additions.
+
+### Setup wizard
+
+The wizard has 11 steps: **Restore** (optional), **Media Server**, **Source Libraries**, **File Locations**, **AI Recommendations**, **Validate**, **Users**, **Top Picks** (optional), **AI / LLM**, **Initial Jobs**, **Complete**. Upstream's [Admin Guide](docs/admin-guide.md) walks through them. Platform-specific volume notes for Unraid, QNAP, Synology and Windows are in upstream's compose files and guides (for example [docs/admin/windows-docker-desktop.md](docs/admin/windows-docker-desktop.md)); they apply here too, but use `docker-compose.fork.yml` as the starting point so that the fork is built.
+
+### Using the fork's image (not publicly pullable yet)
+
+The fork publishes versioned images to GitHub Container Registry, built only from release tags by a manual, owner-approved workflow. **The package is currently private, so you cannot pull it.** [docker-compose.fork-image.example.yml](docker-compose.fork-image.example.yml) is prepared for the day it becomes public: it pins an exact tag (there is no `latest`). Until then use the build-from-source steps above. Versioning and release rules: [docs/fork/releases.md](docs/fork/releases.md).
+
+### Updating
+
+```bash
+git fetch --tags && git checkout <new tag, or main>
+docker compose -f docker-compose.local.yml build
+docker compose -f docker-compose.local.yml up -d
+```
+
+Back up the database first and read [docs/fork/upgrading-and-rollback.md](docs/fork/upgrading-and-rollback.md).
 
 ---
 
@@ -147,7 +163,7 @@ docker-compose -f docker-compose.[your-platform].yml up -d
 
 ## Fork Changes
 
-Changes in this fork relative to upstream `v0.7.10`. Apart from the default selection strategy for automatic requests (see below), everything defaults to upstream behavior.
+Changes in this fork relative to upstream `v0.7.10`. Apart from the default selection strategy for automatic requests (see [Defaults](#defaults-and-how-they-differ-from-upstream)), everything defaults to upstream behavior. Dated history: [NOTICE](NOTICE).
 
 ### Top Picks Requester (Settings → Top Picks → Auto-Request)
 
@@ -184,7 +200,14 @@ The container healthcheck uses `http://127.0.0.1:3456/health` instead of `localh
 
 ### Database
 
-Migration `0115_top_picks_requester_and_seasons.sql` adds two columns to `top_picks_config` (`auto_request_seerr_user_id`, `series_auto_request_seasons`). It is additive, so earlier images continue to run against the migrated database.
+All changes are additive: older images keep running against a migrated database.
+
+| Migration | Release | Adds |
+| --- | --- | --- |
+| `0115_top_picks_requester_and_seasons.sql` | fork.1 | `auto_request_seerr_user_id` and `series_auto_request_seasons` on `top_picks_config` |
+| `0116_auto_request_rules.sql` | fork.2 | `movies_auto_request_rules` and `series_auto_request_rules` (JSON) on `top_picks_config` |
+
+fork.3 and fork.4 need no migration: the Top N Eligible strategy, the skip-unreleased switch and the skipped-titles list live inside the JSON from `0116`.
 
 ---
 
@@ -214,6 +237,10 @@ All schedules are configurable in **Admin → Jobs**.
 | [API Reference](docs/api-reference.md) | Complete API endpoint documentation                          |
 | [Architecture](docs/architecture.md)   | Technical overview, recommendation pipeline, database schema |
 | [Development](docs/development.md)     | Local dev setup, scripts, contribution guidelines            |
+| [Fork: auto-request rules](docs/admin/auto-request-rules.md) | Strategies, filters, preview, skipping titles (fork feature) |
+| [Fork: releases](docs/fork/releases.md) | Version tags, image status, versioning rules (fork)        |
+| [Fork: upgrading and rolling back](docs/fork/upgrading-and-rollback.md) | Migrations and safe rollback (fork)            |
+| [NOTICE](NOTICE)                       | Modifications relative to upstream, with dates and source link |
 
 ---
 
@@ -226,6 +253,8 @@ All schedules are configurable in **Admin → Jobs**.
 
 ---
 
-## License
+## License and notices
 
-[GNU Affero General Public License v3.0](LICENSE)
+Aperture and this fork are licensed under the [GNU Affero General Public License v3.0](LICENSE). This is a **modified version** of Aperture; the modifications and their dates are listed in [NOTICE](NOTICE). The application links to this repository's source code (sign-in page and sidebar), as AGPL-3.0 section 13 requires for network use. If you modify and run this software for others, publish your modified source and point that link at it (`apps/web/src/components/SourceLink.tsx`).
+
+"Aperture" and its original design belong to the upstream project; this fork is not affiliated with it.

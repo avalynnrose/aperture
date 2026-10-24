@@ -46,6 +46,7 @@ import { ExplorationConfigModal } from './ExplorationConfigModal'
 import { RunningJobsWidget } from './RunningJobsWidget'
 import { GlobalSearch } from './GlobalSearch'
 import { useTranslation } from 'react-i18next'
+import { SourceLink } from './SourceLink'
 import { applyEffectiveUiLanguage } from '@/i18n/syncUiLanguage'
 
 const DRAWER_WIDTH = 260
@@ -363,7 +364,8 @@ export function Layout() {
               fontSize: '0.7rem',
             }}
           >
-            v0.7.10
+            v0.7.10 (fork) ·{' '}
+            <SourceLink />
           </Typography>
         )}
       </Box>
