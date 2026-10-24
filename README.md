@@ -65,7 +65,7 @@ This is the supported way to run the fork today. It needs Docker with Compose an
 ```bash
 git clone https://github.com/avalynnrose/aperture.git
 cd aperture
-git checkout v0.7.10-fork.4            # use a release tag, not a moving branch
+git checkout main                      # see the note below about release tags
 cp docker-compose.fork.yml docker-compose.local.yml
 ```
 
@@ -83,6 +83,8 @@ docker compose -f docker-compose.local.yml up -d
 
 4. Open `http://YOUR_SERVER_IP:3456` and complete the setup wizard (below), then log in with your Emby/Jellyfin admin account.
 
+> **About release tags:** the build-from-source files and the in-app source link are newer than the latest release tag (`v0.7.10-fork.4`), so for now the instructions use `main`. A later release tag will include them; once it exists, check out that tag instead of `main` (see [docs/fork/releases.md](docs/fork/releases.md)). `v0.7.10-fork.4` is the version the maintainer runs and its code is the same apart from these additions.
+
 ### Setup wizard
 
 The wizard has 11 steps: **Restore** (optional), **Media Server**, **Source Libraries**, **File Locations**, **AI Recommendations**, **Validate**, **Users**, **Top Picks** (optional), **AI / LLM**, **Initial Jobs**, **Complete**. Upstream's [Admin Guide](docs/admin-guide.md) walks through them. Platform-specific volume notes for Unraid, QNAP, Synology and Windows are in upstream's compose files and guides (for example [docs/admin/windows-docker-desktop.md](docs/admin/windows-docker-desktop.md)); they apply here too, but use `docker-compose.fork.yml` as the starting point so that the fork is built.
@@ -94,7 +96,7 @@ The fork publishes versioned images to GitHub Container Registry, built only fro
 ### Updating
 
 ```bash
-git fetch --tags && git checkout <new tag>
+git fetch --tags && git checkout <new tag, or main>
 docker compose -f docker-compose.local.yml build
 docker compose -f docker-compose.local.yml up -d
 ```
