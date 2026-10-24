@@ -38,18 +38,17 @@ Follow this for every release so the same decisions are not revisited. A release
    `confirm=publish`; the owner approves the `ghcr-publish` gate.
 8. **Verify the published image**: labels (source, revision, version), runs as a non-root user, files
    identical to the tested image (compare `apps/*/dist`, `packages/core/dist`, `db`, `package.json`
-   with `LC_ALL=C sort`), and anonymous pull behaves as intended (HTTP 401 while the package is private).
+   with `LC_ALL=C sort`), and an anonymous pull works.
 9. **GitHub Release**: create the release from the tag with the notes file (installation, changes
-   since upstream, known limitations). Do not mention a registry pull as available unless the package is public.
+   since upstream, known limitations), as a draft first, then publish it.
 10. **Deploy** (maintainer only, separate approval): back up the database, deploy, verify, keep the
     previous container for rollback. Follow [upgrading-and-rollback.md](upgrading-and-rollback.md)
     for any release that changes stored settings.
 11. **Record** the release in the maintainer's own runbook.
 
-## Making the package public (one-time)
+## Package visibility
 
-Only after a release has been verified. In GitHub: profile → Packages → `aperture` → Package
-settings → connect repository `avalynnrose/aperture`; then Danger Zone → Change visibility → Public.
-Afterwards check that an anonymous `docker pull ghcr.io/avalynnrose/aperture:<tag>` works and
-update the README, `docs/fork/releases.md` and the image example to say so. Making a package public
-makes **all** its versions public.
+The package was made public after fork.5 (2026-10-23) and stays public; it is linked to this
+repository. Making a package public makes all its versions public, so never publish an image that
+contains anything private. After each release, confirm an anonymous pull works
+(`DOCKER_CONFIG=$(mktemp -d) docker pull ghcr.io/avalynnrose/aperture:<tag>`).

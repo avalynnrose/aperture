@@ -1,12 +1,8 @@
 # =============================================================================
 # Aperture (independently maintained fork) - run the fork's published image
 # =============================================================================
-# NOT PUBLICLY PULLABLE YET. The fork's container package is currently private, so
-# `docker compose pull` will fail with "denied" or "unauthorized" for everyone except the
-# fork owner. This file is kept ready for the day the package is made public. Until then,
-# build from source with docker-compose.fork.yml.
-#
-# When the image is public:
+# The fork's container package is public: `docker compose pull` works without logging in.
+# Images are linux/amd64 only; on other architectures use docker-compose.fork.yml (build from source).
 #   - always pin an exact release tag (below). There is deliberately no "latest" tag.
 #   - read docs/fork/releases.md and docs/fork/upgrading-and-rollback.md before upgrading.
 #

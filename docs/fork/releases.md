@@ -21,7 +21,7 @@ for example `v0.7.10-fork.5`: upstream Aperture 0.7.10 plus the fork's fifth rel
 | You want | Use |
 | --- | --- |
 | Build it yourself (works today) | `git checkout <tag>` and `docker-compose.fork.yml` |
-| The published image (only once the package is public) | `ghcr.io/avalynnrose/aperture:<tag>` via `docker-compose.fork-image.example.yml` |
+| The published image | `ghcr.io/avalynnrose/aperture:<tag>` via `docker-compose.fork-image.example.yml` |
 | Upstream behaviour and support | the upstream project and image, not this fork |
 
 ## Suggested practice for the maintainer
@@ -38,9 +38,7 @@ Every release follows [release-checklist.md](release-checklist.md). Release note
 
 ## Image status
 
-Published images are **linux/amd64 only**. On other architectures (for example ARM), build from source.
-
-The container package is currently **private**, so the published image cannot be pulled by
-others yet. See the README ("Using the fork's image"). Source builds from a tag are
-equivalent to the published image: the published images are checked file by file against a separate
-build of the same commit before a release is announced.
+The container package `ghcr.io/avalynnrose/aperture` is **public** and every release tag has an
+image. Published images are **linux/amd64 only**; on other architectures (for example ARM), build from
+source. Source builds from a tag are equivalent to the published image: the published images are
+checked file by file against a separate build of the same commit before a release is announced.

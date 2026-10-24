@@ -8,7 +8,7 @@
 >
 > - **Upstream project, documentation and support:** https://github.com/dgruhin-hrizn/aperture
 > - **This fork's source:** https://github.com/avalynnrose/aperture (release tags look like `v0.7.10-fork.4`)
-> - **The upstream container image does not include this fork's features.** The fork's own image is **not publicly pullable yet**; build from source (below).
+> - **The upstream container image does not include this fork's features.** Use this fork's own image (`ghcr.io/avalynnrose/aperture:<release tag>`, linux/amd64) or build from source (below).
 
 **Aperture** — AI-powered media recommendations for Emby & Jellyfin. It creates personalized recommendation libraries for your media server users using OpenAI embeddings and pgvector similarity search, for both **movies** and **TV series**.
 
@@ -48,7 +48,7 @@ To get upstream's selection behaviour, choose **Missing-first** for movies and s
 
 ### Limitations
 
-- The fork's container image (once public) is built for **linux/amd64 only**, unlike upstream's multi-architecture images. On ARM hosts build from source.
+- The fork's container image is built for **linux/amd64 only**, unlike upstream's multi-architecture images. On ARM hosts build from source.
 - Independently maintained and best effort; it only tracks upstream occasionally. Do not expect upstream support for fork features.
 - Tested with unit and integration tests in CI (mock Seerr and TMDB) and on the maintainer's own server. Not tested against every Emby/Jellyfin/Seerr combination.
 - The new screens are **English only**; other languages fall back to English for these strings.
@@ -61,7 +61,7 @@ To get upstream's selection behaviour, choose **Missing-first** for movies and s
 
 ## Quick Start (build from source)
 
-This is the supported way to run the fork today. It needs Docker with Compose and about 4 GB of free RAM while building.
+Building from source works on any architecture. It needs Docker with Compose and about 4 GB of free RAM while building. (To use the prebuilt image instead, see the next section.)
 
 ```bash
 git clone https://github.com/avalynnrose/aperture.git
@@ -89,9 +89,15 @@ docker compose -f docker-compose.local.yml up -d
 
 The wizard has 11 steps: **Restore** (optional), **Media Server**, **Source Libraries**, **File Locations**, **AI Recommendations**, **Validate**, **Users**, **Top Picks** (optional), **AI / LLM**, **Initial Jobs**, **Complete**. Upstream's [Admin Guide](docs/admin-guide.md) walks through them. Platform-specific volume notes for Unraid, QNAP, Synology and Windows are in upstream's compose files and guides (for example [docs/admin/windows-docker-desktop.md](docs/admin/windows-docker-desktop.md)); they apply here too, but use `docker-compose.fork.yml` as the starting point so that the fork is built.
 
-### Using the fork's image (not publicly pullable yet)
+### Using the fork's published image
 
-The fork publishes versioned images to GitHub Container Registry, built only from release tags by a manual, owner-approved workflow. **The package is currently private, so you cannot pull it.** [docker-compose.fork-image.example.yml](docker-compose.fork-image.example.yml) is prepared for the day it becomes public: it pins an exact tag (there is no `latest`). Until then use the build-from-source steps above. Versioning and release rules: [docs/fork/releases.md](docs/fork/releases.md).
+Versioned images are published to GitHub Container Registry, built only from release tags by a manual, owner-approved workflow, and are **publicly pullable** (linux/amd64 only; on other architectures build from source). There is deliberately **no `latest` tag**: pin an exact release tag.
+
+```bash
+docker pull ghcr.io/avalynnrose/aperture:v0.7.10-fork.5
+```
+
+[docker-compose.fork-image.example.yml](docker-compose.fork-image.example.yml) is a complete compose file that uses the image; set `APP_BASE_URL`, `SESSION_SECRET` and the volume paths as described above. Versioning and release rules: [docs/fork/releases.md](docs/fork/releases.md).
 
 ### Updating
 
