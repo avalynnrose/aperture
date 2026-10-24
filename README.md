@@ -48,6 +48,7 @@ To get upstream's selection behaviour, choose **Missing-first** for movies and s
 
 ### Limitations
 
+- The fork's container image (once public) is built for **linux/amd64 only**, unlike upstream's multi-architecture images. On ARM hosts build from source.
 - Independently maintained and best effort; it only tracks upstream occasionally. Do not expect upstream support for fork features.
 - Tested with unit and integration tests in CI (mock Seerr and TMDB) and on the maintainer's own server. Not tested against every Emby/Jellyfin/Seerr combination.
 - The new screens are **English only**; other languages fall back to English for these strings.

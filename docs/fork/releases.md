@@ -34,6 +34,8 @@ for example `v0.7.10-fork.4`: upstream Aperture 0.7.10 plus the fork's fourth re
 
 ## Image status
 
+Published images are **linux/amd64 only**. On other architectures (for example ARM), build from source.
+
 The container package is currently **private**, so the published image cannot be pulled by
 others yet. See the README ("Using the fork's image"). Source builds from a tag are
 equivalent to the published image: the published `v0.7.10-fork.3` and `v0.7.10-fork.4` images were
